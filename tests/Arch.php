@@ -10,7 +10,8 @@ test('facades')
         'Illuminate\Support\Facades\Facade',
         'Anthropic\Contracts\ResponseContract',
         'Anthropic\Laravel\Testing\AnthropicFake',
-        'Anthropic\Responses\StreamResponse',
+        'Anthropic\Responses\Completions\StreamResponse',
+        'Anthropic\Responses\Messages\StreamResponse',
     ]);
 
 test('service providers')
@@ -26,3 +27,7 @@ test('service providers')
         'config',
         'config_path',
     ]);
+
+arch('Not debugging statements are left in our code.')
+    ->expect(['dd', 'ddd', 'dump', 'ray', 'die', 'var_dump', 'print_r'])
+    ->each->not->toBeUsed();
