@@ -1,19 +1,32 @@
-<p align="center">
-    <p align="center">
-        <a href="https://github.com/anthropic-php/laravel/actions"><img alt="GitHub Workflow Status (master)" src="https://img.shields.io/github/actions/workflow/status/anthropic-php/laravel/tests.yml?branch=main&label=tests&style=round-square"></a>
-        <a href="https://packagist.org/packages/anthropic-php/laravel"><img alt="Total Downloads" src="https://img.shields.io/packagist/dt/anthropic-php/laravel"></a>
-        <a href="https://packagist.org/packages/anthropic-php/laravel"><img alt="Latest Version" src="https://img.shields.io/packagist/v/anthropic-php/laravel"></a>
-        <a href="https://packagist.org/packages/anthropic-php/laravel"><img alt="License" src="https://img.shields.io/github/license/anthropic-php/laravel"></a>
-    </p>
-</p>
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
+[![GitHub Tests Workflow Status](https://img.shields.io/github/actions/workflow/status/mozex/anthropic-laravel/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mozex/anthropic-laravel/actions/workflows/tests.yml)
+[![License](https://img.shields.io/github/license/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
 
 ------
-**Anthropic PHP** for Laravel is a community-maintained PHP API client that allows you to interact with the [Anthropic API](https://beta.anthropic.com/docs/api-reference/introduction). If you or your business relies on this package, it's important to support the developers who have contributed their time and effort to create and maintain this valuable tool:
+**Anthropic Laravel** is a community-maintained PHP API client that allows you to interact with the [Anthropic API](https://docs.anthropic.com/claude/docs/intro-to-claude). This package is based on the excellent work of [Nuno Maduro](https://github.com/nunomaduro) and [Sandro Gehri](https://github.com/gehrisandro).
 
-- Nuno Maduro: **[github.com/sponsors/nunomaduro](https://github.com/sponsors/nunomaduro)**
-- Sandro Gehri: **[github.com/sponsors/gehrisandro](https://github.com/sponsors/gehrisandro)**
+> **Note:** This repository contains the integration code of the **Anthropic PHP** for Laravel. If you want to use the **Anthropic PHP** client in a framework-agnostic way, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
 
-> **Note:** This repository contains the integration code of the **Anthropic PHP** for Laravel. If you want to use the **Anthropic PHP** client in a framework-agnostic way, take a look at the [anthropic-php/client](https://github.com/anthropic-php/client) repository.
+## Table of Contents
+
+- [Support Us](#support-us)
+- [Get Started](#get-started)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Testing](#testing)
+- [Changelog](#changelog)
+- [Contributing](#contributing)
+- [Security Vulnerabilities](#security-vulnerabilities)
+- [Credits](#credits)
+- [License](#license)
+
+## Support us
+
+Creating and maintaining open-source projects requires significant time and effort. Your support will help enhance the project and enable further contributions to the PHP community.
+
+Sponsorship can be made through the [GitHub Sponsors](https://github.com/sponsors/mozex) program. Just click the "**[Sponsor](https://github.com/sponsors/mozex)**" button at the top of this repository. Any amount is greatly appreciated, even a contribution as small as $1 can make a big difference and will go directly towards developing and improving this package.
+
+Thank you for considering sponsoring. Your support truly makes a difference!
 
 ## Get Started
 
@@ -22,7 +35,7 @@
 First, install Anthropic via the [Composer](https://getcomposer.org/) package manager:
 
 ```bash
-composer require anthropic-php/laravel
+composer require mozex/anthropic-laravel
 ```
 
 Next, execute the install command:
@@ -33,11 +46,10 @@ php artisan anthropic:install
 
 This will create a `config/anthropic.php` configuration file in your project, which you can modify to your needs
 using environment variables.
-Blank environment variables for the Anthropic API key and organization id are already appended to your `.env` file.
+Blank environment variable for the Anthropic API key is already appended to your `.env` file.
 
 ```env
 ANTHROPIC_API_KEY=sk-...
-ANTHROPIC_ORGANIZATION=org-...
 ```
 
 Finally, you may use the `Anthropic` facade to access the Anthropic API:
@@ -45,29 +57,27 @@ Finally, you may use the `Anthropic` facade to access the Anthropic API:
 ```php
 use Anthropic\Laravel\Facades\Anthropic;
 
-$result = Anthropic::chat()->create([
-    'model' => 'gpt-3.5-turbo',
+$result = Anthropic::messages()->create([
+    'model' => 'claude-3-opus-20240229',
+    'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
     ],
 ]);
 
-echo $result->choices[0]->message->content; // Hello! How can I assist you today?
+echo $result->content[0]->text; // Hello! How can I assist you today?
 ```
 
 ## Configuration
 
 Configuration is done via environment variables or directly in the configuration file (`config/anthropic.php`).
 
-### Anthropic API Key and Organization
+### Anthropic API Key
 
-Specify your Anthropic API Key and organization. This will be
-used to authenticate with the Anthropic API - you can find your API key
-and organization on your Anthropic dashboard, at https://anthropic.com.
+Specify your Anthropic API Key. This will be used to authenticate with the Anthropic API - you can find your API key on your Anthropic dashboard, at https://console.anthropic.com/settings/keys.
 
 ```env
 ANTHROPIC_API_KEY=
-ANTHROPIC_ORGANIZATION=
 ```
 
 ### Request Timeout
@@ -81,7 +91,7 @@ ANTHROPIC_REQUEST_TIMEOUT=
 
 ## Usage
 
-For usage examples, take a look at the [anthropic-php/client](https://github.com/anthropic-php/client) repository.
+For usage examples, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
 
 ## Testing
 
@@ -97,20 +107,17 @@ use Anthropic\Responses\Completions\CreateResponse;
 
 Anthropic::fake([
     CreateResponse::fake([
-        'choices' => [
-            [
-                'text' => 'awesome!',
-            ],
-        ],
+        'completion' => 'awesome!',
     ]),
 ]);
 
 $completion = Anthropic::completions()->create([
-    'model' => 'gpt-3.5-turbo-instruct',
-    'prompt' => 'PHP is ',
+    'model' => 'claude-2.1',
+    'prompt' => '\n\nHuman: PHP is \n\nAssistant:',
+    'max_tokens_to_sample' => 100,
 ]);
 
-expect($completion['choices'][0]['text'])->toBe('awesome!');
+expect($completion['completion'])->toBe('awesome!');
 ```
 
 After the requests have been sent there are various methods to ensure that the expected requests were sent:
@@ -119,13 +126,30 @@ After the requests have been sent there are various methods to ensure that the e
 // assert completion create request was sent
 Anthropic::assertSent(Completions::class, function (string $method, array $parameters): bool {
     return $method === 'create' &&
-        $parameters['model'] === 'gpt-3.5-turbo-instruct' &&
+        $parameters['model'] === 'claude-2.1' &&
         $parameters['prompt'] === 'PHP is ';
 });
 ```
 
-For more testing examples, take a look at the [anthropic-php/client](https://github.com/anthropic-php/client#testing) repository.
+For more testing examples, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php#testing) repository.
 
----
+## Changelog
 
-Anthropic PHP for Laravel is an open-sourced software licensed under the **[MIT license](https://opensource.org/licenses/MIT)**.
+Please see [CHANGELOG](CHANGELOG.md) for more information on what has changed recently.
+
+## Contributing
+
+Please see [CONTRIBUTING](CONTRIBUTING.md) for details.
+
+## Security Vulnerabilities
+
+Please review [our security policy](../../security/policy) on how to report security vulnerabilities.
+
+## Credits
+
+- [Mozex](https://github.com/mozex)
+- [All Contributors](../../contributors)
+
+## License
+
+The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
