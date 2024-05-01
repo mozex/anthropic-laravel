@@ -2,21 +2,19 @@
 
 namespace Anthropic\Laravel\Commands;
 
-use Illuminate\Console\Command;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Laravel\Support\View;
+use Illuminate\Console\Command;
 
 class InstallCommand extends Command
 {
     private const LINKS = [
-        'Repository' => 'https://github.com/anthropic-php/laravel',
-        'Anthropic PHP Docs' => 'https://github.com/anthropic-php/client#readme',
-        'Join us on Telegram' => 'https://t.me/+66GDs6UM6RcxY2U8',
+        'Repository' => 'https://github.com/mozex/anthropic-laravel',
+        'Anthropic PHP Docs' => 'https://github.com/mozex/anthropic-php#readme',
     ];
 
     private const FUNDING_LINKS = [
-        'Sponsor Sandro' => 'https://github.com/sponsors/gehrisandro',
-        'Sponsor Nuno' => 'https://github.com/sponsors/nunomaduro',
+        'Mozex' => 'https://github.com/sponsors/mozex',
     ];
 
     protected $signature = 'anthropic:install';
@@ -47,7 +45,7 @@ class InstallCommand extends Command
 
         View::render('components.badge', [
             'type' => 'INFO',
-            'content' => 'Open your .env and add your Anthropic API key and organization id.',
+            'content' => 'Open your .env and add your Anthropic API key.',
         ]);
 
         if ($wantsToSupport) {
@@ -84,20 +82,20 @@ class InstallCommand extends Command
             return;
         }
 
-        if (str_contains($fileContent, 'OPENAI_API_KEY')) {
+        if (str_contains($fileContent, 'ANTHROPIC_API_KEY')) {
             View::render('components.two-column-detail', [
                 'left' => $envFile,
-                'right' => 'Variables already exists.',
+                'right' => 'Variable already exists.',
             ]);
 
             return;
         }
 
-        file_put_contents(base_path($envFile), PHP_EOL.'OPENAI_API_KEY='.PHP_EOL.'OPENAI_ORGANIZATION='.PHP_EOL, FILE_APPEND);
+        file_put_contents(base_path($envFile), PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL, FILE_APPEND);
 
         View::render('components.two-column-detail', [
             'left' => $envFile,
-            'right' => 'OPENAI_API_KEY and OPENAI_ORGANIZATION variables added.',
+            'right' => 'ANTHROPIC_API_KEY variable added.',
         ]);
     }
 
@@ -113,13 +111,13 @@ class InstallCommand extends Command
     private function openRepositoryInBrowser(): void
     {
         if (PHP_OS_FAMILY == 'Darwin') {
-            exec('open https://github.com/anthropic-php/laravel');
+            exec('open https://github.com/mozex/anthropic-laravel');
         }
         if (PHP_OS_FAMILY == 'Windows') {
-            exec('start https://github.com/anthropic-php/laravel');
+            exec('start https://github.com/mozex/anthropic-laravel');
         }
         if (PHP_OS_FAMILY == 'Linux') {
-            exec('xdg-open https://github.com/anthropic-php/laravel');
+            exec('xdg-open https://github.com/mozex/anthropic-laravel');
         }
     }
 
