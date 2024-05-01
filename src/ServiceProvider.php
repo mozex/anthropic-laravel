@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Anthropic\Laravel;
 
-use Illuminate\Contracts\Support\DeferrableProvider;
-use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 use Anthropic;
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Illuminate\Contracts\Support\DeferrableProvider;
+use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 /**
  * @internal
