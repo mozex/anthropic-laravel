@@ -11,7 +11,7 @@ use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static \Anthropic\Resources\Messages chat()
+ * @method static \Anthropic\Resources\Messages messages()
  * @method static \Anthropic\Resources\Completions completions()
  */
 final class Anthropic extends Facade
