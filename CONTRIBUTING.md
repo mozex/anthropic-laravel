@@ -29,6 +29,7 @@ Lint your code:
 ```bash
 composer lint
 ```
+
 ## Tests
 
 Run all tests:
