@@ -1,9 +1,9 @@
 <?php
 
-namespace OpenAI\Laravel\Testing;
+namespace Anthropic\Laravel\Testing;
 
-use OpenAI\Testing\ClientFake;
+use Anthropic\Testing\ClientFake;
 
-class OpenAIFake extends ClientFake
+class AnthropicFake extends ClientFake
 {
 }

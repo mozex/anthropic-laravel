@@ -1,16 +1,16 @@
 <?php
 
-namespace OpenAI\Laravel\Commands;
+namespace Anthropic\Laravel\Commands;
 
 use Illuminate\Console\Command;
-use OpenAI\Laravel\ServiceProvider;
-use OpenAI\Laravel\Support\View;
+use Anthropic\Laravel\ServiceProvider;
+use Anthropic\Laravel\Support\View;
 
 class InstallCommand extends Command
 {
     private const LINKS = [
-        'Repository' => 'https://github.com/openai-php/laravel',
-        'OpenAI PHP Docs' => 'https://github.com/openai-php/client#readme',
+        'Repository' => 'https://github.com/anthropic-php/laravel',
+        'Anthropic PHP Docs' => 'https://github.com/anthropic-php/client#readme',
         'Join us on Telegram' => 'https://t.me/+66GDs6UM6RcxY2U8',
     ];
 
@@ -19,9 +19,9 @@ class InstallCommand extends Command
         'Sponsor Nuno' => 'https://github.com/sponsors/nunomaduro',
     ];
 
-    protected $signature = 'openai:install';
+    protected $signature = 'anthropic:install';
 
-    protected $description = 'Prepares the OpenAI client for use.';
+    protected $description = 'Prepares the Anthropic client for use.';
 
     public function handle(): void
     {
@@ -29,7 +29,7 @@ class InstallCommand extends Command
 
         View::render('components.badge', [
             'type' => 'INFO',
-            'content' => 'Installing OpenAI for Laravel.',
+            'content' => 'Installing Anthropic for Laravel.',
         ]);
 
         $this->copyConfig();
@@ -47,7 +47,7 @@ class InstallCommand extends Command
 
         View::render('components.badge', [
             'type' => 'INFO',
-            'content' => 'Open your .env and add your OpenAI API key and organization id.',
+            'content' => 'Open your .env and add your Anthropic API key and organization id.',
         ]);
 
         if ($wantsToSupport) {
@@ -57,9 +57,9 @@ class InstallCommand extends Command
 
     private function copyConfig(): void
     {
-        if (file_exists(config_path('openai.php'))) {
+        if (file_exists(config_path('anthropic.php'))) {
             View::render('components.two-column-detail', [
-                'left' => 'config/openai.php',
+                'left' => 'config/anthropic.php',
                 'right' => 'File already exists.',
             ]);
 
@@ -67,7 +67,7 @@ class InstallCommand extends Command
         }
 
         View::render('components.two-column-detail', [
-            'left' => 'config/openai.php',
+            'left' => 'config/anthropic.php',
             'right' => 'File created.',
         ]);
 
@@ -107,19 +107,19 @@ class InstallCommand extends Command
             return false;
         }
 
-        return $this->confirm(' <options=bold>Wanna show OpenAI for Laravel some love by starring it on GitHub?</>', false);
+        return $this->confirm(' <options=bold>Wanna show Anthropic for Laravel some love by starring it on GitHub?</>', false);
     }
 
     private function openRepositoryInBrowser(): void
     {
         if (PHP_OS_FAMILY == 'Darwin') {
-            exec('open https://github.com/openai-php/laravel');
+            exec('open https://github.com/anthropic-php/laravel');
         }
         if (PHP_OS_FAMILY == 'Windows') {
-            exec('start https://github.com/openai-php/laravel');
+            exec('start https://github.com/anthropic-php/laravel');
         }
         if (PHP_OS_FAMILY == 'Linux') {
-            exec('xdg-open https://github.com/openai-php/laravel');
+            exec('xdg-open https://github.com/anthropic-php/laravel');
         }
     }
 

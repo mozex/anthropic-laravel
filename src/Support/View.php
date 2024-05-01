@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OpenAI\Laravel\Support;
+namespace Anthropic\Laravel\Support;
 
 use Symfony\Component\Console\Output\OutputInterface;
 use Termwind\Termwind;

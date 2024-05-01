@@ -1,25 +1,25 @@
 <?php
 
 test('exceptions')
-    ->expect('OpenAI\Laravel\Exceptions')
+    ->expect('Anthropic\Laravel\Exceptions')
     ->toUseNothing();
 
 test('facades')
-    ->expect('OpenAI\Laravel\Facades\OpenAI')
+    ->expect('Anthropic\Laravel\Facades\Anthropic')
     ->toOnlyUse([
         'Illuminate\Support\Facades\Facade',
-        'OpenAI\Contracts\ResponseContract',
-        'OpenAI\Laravel\Testing\OpenAIFake',
-        'OpenAI\Responses\StreamResponse',
+        'Anthropic\Contracts\ResponseContract',
+        'Anthropic\Laravel\Testing\AnthropicFake',
+        'Anthropic\Responses\StreamResponse',
     ]);
 
 test('service providers')
-    ->expect('OpenAI\Laravel\ServiceProvider')
+    ->expect('Anthropic\Laravel\ServiceProvider')
     ->toOnlyUse([
         'GuzzleHttp\Client',
         'Illuminate\Support\ServiceProvider',
-        'OpenAI\Laravel',
-        'OpenAI',
+        'Anthropic\Laravel',
+        'Anthropic',
         'Illuminate\Contracts\Support\DeferrableProvider',
 
         // helpers...

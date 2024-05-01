@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace OpenAI\Laravel\Exceptions;
+namespace Anthropic\Laravel\Exceptions;
 
 use InvalidArgumentException;
 
@@ -17,7 +17,7 @@ final class ApiKeyIsMissing extends InvalidArgumentException
     public static function create(): self
     {
         return new self(
-            'The OpenAI API Key is missing. Please publish the [openai.php] configuration file and set the [api_key].'
+            'The Anthropic API Key is missing. Please publish the [anthropic.php] configuration file and set the [api_key].'
         );
     }
 }

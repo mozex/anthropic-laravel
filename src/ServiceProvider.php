@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace OpenAI\Laravel;
+namespace Anthropic\Laravel;
 
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
-use OpenAI;
-use OpenAI\Client;
-use OpenAI\Contracts\ClientContract;
-use OpenAI\Laravel\Commands\InstallCommand;
-use OpenAI\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic;
+use Anthropic\Client;
+use Anthropic\Contracts\ClientContract;
+use Anthropic\Laravel\Commands\InstallCommand;
+use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 
 /**
  * @internal
@@ -23,22 +23,20 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
     public function register(): void
     {
         $this->app->singleton(ClientContract::class, static function (): Client {
-            $apiKey = config('openai.api_key');
-            $organization = config('openai.organization');
+            $apiKey = config('anthropic.api_key');
 
-            if (! is_string($apiKey) || ($organization !== null && ! is_string($organization))) {
+            if (! is_string($apiKey)) {
                 throw ApiKeyIsMissing::create();
             }
 
-            return OpenAI::factory()
+            return Anthropic::factory()
                 ->withApiKey($apiKey)
-                ->withOrganization($organization)
-                ->withHttpHeader('OpenAI-Beta', 'assistants=v1')
-                ->withHttpClient(new \GuzzleHttp\Client(['timeout' => config('openai.request_timeout', 30)]))
+                ->withHttpHeader('anthropic-version', '2023-06-01')
+                ->withHttpClient(new \GuzzleHttp\Client(['timeout' => config('anthropic.request_timeout', 30)]))
                 ->make();
         });
 
-        $this->app->alias(ClientContract::class, 'openai');
+        $this->app->alias(ClientContract::class, 'anthropic');
         $this->app->alias(ClientContract::class, Client::class);
     }
 
@@ -49,7 +47,7 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/anthropic.php' => config_path('openai.php'),
+                __DIR__.'/../config/anthropic.php' => config_path('anthropic.php'),
             ]);
 
             $this->commands([
@@ -68,7 +66,7 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
         return [
             Client::class,
             ClientContract::class,
-            'openai',
+            'anthropic',
         ];
     }
 }

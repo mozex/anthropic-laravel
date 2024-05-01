@@ -2,43 +2,43 @@
 
 declare(strict_types=1);
 
-namespace OpenAI\Laravel\Facades;
+namespace Anthropic\Laravel\Facades;
 
 use Illuminate\Support\Facades\Facade;
-use OpenAI\Contracts\ResponseContract;
-use OpenAI\Laravel\Testing\OpenAIFake;
-use OpenAI\Responses\StreamResponse;
+use Anthropic\Contracts\ResponseContract;
+use Anthropic\Laravel\Testing\AnthropicFake;
+use Anthropic\Responses\StreamResponse;
 
 /**
- * @method static \OpenAI\Resources\Assistants assistants()
- * @method static \OpenAI\Resources\Audio audio()
- * @method static \OpenAI\Resources\Chat chat()
- * @method static \OpenAI\Resources\Completions completions()
- * @method static \OpenAI\Resources\Embeddings embeddings()
- * @method static \OpenAI\Resources\Edits edits()
- * @method static \OpenAI\Resources\Files files()
- * @method static \OpenAI\Resources\FineTunes fineTunes()
- * @method static \OpenAI\Resources\Images images()
- * @method static \OpenAI\Resources\Models models()
- * @method static \OpenAI\Resources\Moderations moderations()
- * @method static \OpenAI\Resources\Threads threads()
+ * @method static \Anthropic\Resources\Assistants assistants()
+ * @method static \Anthropic\Resources\Audio audio()
+ * @method static \Anthropic\Resources\Chat chat()
+ * @method static \Anthropic\Resources\Completions completions()
+ * @method static \Anthropic\Resources\Embeddings embeddings()
+ * @method static \Anthropic\Resources\Edits edits()
+ * @method static \Anthropic\Resources\Files files()
+ * @method static \Anthropic\Resources\FineTunes fineTunes()
+ * @method static \Anthropic\Resources\Images images()
+ * @method static \Anthropic\Resources\Models models()
+ * @method static \Anthropic\Resources\Moderations moderations()
+ * @method static \Anthropic\Resources\Threads threads()
  */
-final class OpenAI extends Facade
+final class Anthropic extends Facade
 {
     /**
      * Get the registered name of the component.
      */
     protected static function getFacadeAccessor(): string
     {
-        return 'openai';
+        return 'anthropic';
     }
 
     /**
      * @param  array<array-key, ResponseContract|StreamResponse|string>  $responses
      */
-    public static function fake(array $responses = []): OpenAIFake /** @phpstan-ignore-line */
+    public static function fake(array $responses = []): AnthropicFake /** @phpstan-ignore-line */
     {
-        $fake = new OpenAIFake($responses);
+        $fake = new AnthropicFake($responses);
         self::swap($fake);
 
         return $fake;
