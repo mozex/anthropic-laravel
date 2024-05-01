@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\Config\Repository;
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\ServiceProvider;
+use Illuminate\Config\Repository;
 
 it('binds the client on the container', function () {
     $app = app();
