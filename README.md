@@ -36,8 +36,8 @@ using environment variables.
 Blank environment variables for the Anthropic API key and organization id are already appended to your `.env` file.
 
 ```env
-OPENAI_API_KEY=sk-...
-OPENAI_ORGANIZATION=org-...
+ANTHROPIC_API_KEY=sk-...
+ANTHROPIC_ORGANIZATION=org-...
 ```
 
 Finally, you may use the `Anthropic` facade to access the Anthropic API:
@@ -66,8 +66,8 @@ used to authenticate with the Anthropic API - you can find your API key
 and organization on your Anthropic dashboard, at https://anthropic.com.
 
 ```env
-OPENAI_API_KEY=
-OPENAI_ORGANIZATION=
+ANTHROPIC_API_KEY=
+ANTHROPIC_ORGANIZATION=
 ```
 
 ### Request Timeout
@@ -76,7 +76,7 @@ The timeout may be used to specify the maximum number of seconds to wait
 for a response. By default, the client will time out after 30 seconds.
 
 ```env
-OPENAI_REQUEST_TIMEOUT=
+ANTHROPIC_REQUEST_TIMEOUT=
 ```
 
 ## Usage
