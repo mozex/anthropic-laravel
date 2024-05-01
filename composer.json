@@ -1,0 +1,65 @@
+{
+    "name": "mozex/anthropic-laravel",
+    "description": "Anthropic PHP for Laravel is a supercharged PHP API client that allows you to interact with the Anthropic API",
+    "keywords": ["laravel", "php", "anthropic", "sdk", "claude", "Claude-3-Opus", "Claude-3-Sonnet", "Claude-3-Haiku", "api", "client", "natural", "language", "processing"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Mozex",
+            "email": "mozex@alphorld.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1.0",
+        "guzzlehttp/guzzle": "^7.8.1",
+        "laravel/framework": "^9.46.0|^10.34.2|^11.0",
+        "mozex/anthropic-php": "^v1.0.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.13.6",
+        "pestphp/pest": "^2.27.0",
+        "pestphp/pest-plugin-arch": "^2.4.1",
+        "phpstan/phpstan": "^1.10.47",
+        "spatie/ray": "^1.41",
+        "symfony/var-dumper": "^6.4.0|^7.0.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Anthropic\\Laravel\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "php-http/discovery": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Anthropic\\Laravel\\ServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "lint": "pint -v",
+        "refactor": "rector --debug",
+        "test:lint": "pint --test -v",
+        "test:types": "phpstan analyse --ansi",
+        "test:unit": "pest --colors=always",
+        "test": [
+            "@test:lint",
+            "@test:types",
+            "@test:unit"
+        ]
+    }
+}
