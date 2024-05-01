@@ -49,7 +49,7 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/openai.php' => config_path('openai.php'),
+                __DIR__.'/../config/anthropic.php' => config_path('openai.php'),
             ]);
 
             $this->commands([
