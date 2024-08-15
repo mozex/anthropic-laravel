@@ -16,10 +16,10 @@
         "mozex/anthropic-php": "^v1.0.2"
     },
     "require-dev": {
-        "laravel/pint": "^1.13.6",
-        "pestphp/pest": "^2.27.0",
-        "pestphp/pest-plugin-arch": "^2.4.1",
-        "phpstan/phpstan": "^1.10.47",
+        "laravel/pint": "^1.16.1",
+        "pestphp/pest": "^2.34.7",
+        "pestphp/pest-plugin-arch": "^2.7",
+        "phpstan/phpstan": "^1.11.2",
         "spatie/ray": "^1.41",
         "symfony/var-dumper": "^6.4.0|^7.0.1"
     },
