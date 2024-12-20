@@ -42,6 +42,8 @@ it('requires an api key', function () {
     $app->bind('config', fn () => new Repository([]));
 
     (new ServiceProvider($app))->register();
+
+    $app->get(Client::class);
 })->throws(
     ApiKeyIsMissing::class,
     'The Anthropic API Key is missing. Please publish the [anthropic.php] configuration file and set the [api_key].',
