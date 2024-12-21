@@ -13,7 +13,7 @@
         "php": "^8.1.0",
         "guzzlehttp/guzzle": "^7.9.2",
         "laravel/framework": "^9.46.0|^10.34.2|^11.23.5",
-        "mozex/anthropic-php": "^v1.0.3"
+        "mozex/anthropic-php": "^v1.1.0"
     },
     "require-dev": {
         "laravel/pint": "^1.17.3",
