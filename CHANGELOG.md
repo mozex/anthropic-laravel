@@ -2,6 +2,12 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.1.0 - 2024-12-21
+
+- Changed underlying mozex/anthropic-php package version from v1.0.3 to v1.1.0
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.0.3...1.1.0
+
 ## 1.0.3 - 2024-12-20
 
 * [bump dependencies](https://github.com/mozex/anthropic-laravel/commit/1805d40bbcc96be5bc52d7c5572e51cb99bc6724)
