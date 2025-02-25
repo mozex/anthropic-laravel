@@ -2,6 +2,14 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.2.0 - 2025-02-25
+
+### What's Changed
+
+* Add Laravel 12 compatibility by @mozex in https://github.com/mozex/anthropic-laravel/pull/6
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.1.0...1.2.0
+
 ## 1.1.0 - 2024-12-21
 
 - Changed underlying mozex/anthropic-php package version from v1.0.3 to v1.1.0
