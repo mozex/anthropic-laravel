@@ -2,6 +2,19 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.3.0 - 2026-03-04
+
+### What's Changed
+
+* Bump `mozex/anthropic-php` to ^1.2.0
+* bump dependencies
+* dropped php 8.1 support
+* dropped laravel 9 and 10 support
+
+See the [anthropic-php UPGRADING.md](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md) for details on new features and changes. All changes are backwards compatible.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.2.0...1.3.0
+
 ## 1.2.0 - 2025-02-25
 
 ### What's Changed
