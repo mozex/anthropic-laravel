@@ -6,6 +6,7 @@
 
 - [ ] Bug Fix
 - [ ] New Feature
+- [ ] Docs
 
 ### Description:
 

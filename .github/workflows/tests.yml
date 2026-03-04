@@ -8,21 +8,20 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        php: [8.1, 8.2, 8.3, 8.4]
-        laravel: [12.*, 11.*, 10.*, 9.*]
+        os: [ubuntu-latest]
+        php: [ 8.2, 8.3, 8.4 ]
+        laravel: [ 11, 12 ]
+        pest: [ 3, 4 ]
         dependency-version: [prefer-lowest, prefer-stable]
         exclude:
-          - php: 8.1
-            laravel: 11.*
-          - php: 8.1
-            laravel: 12.*
+          - php: 8.2
+            pest: 4
 
-    name: Tests P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.os }} - ${{ matrix.dependency-version }}
+    name: Tests P${{ matrix.php }} - P${{ matrix.pest }} - L${{ matrix.laravel }} - ${{ matrix.os }} - ${{ matrix.dependency-version }}
     steps:
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Cache dependencies
       uses: actions/cache@v4
@@ -34,14 +33,20 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ matrix.php }}
-        extensions: dom, mbstring, zip, fileinfo
+        extensions: dom, mbstring, zip
         coverage: none
+
+    - name: Require Pest Version
+      run: >
+        composer require
+        "pestphp/pest:^${{ matrix.pest }}"
+        --no-interaction --no-update --with-all-dependencies
 
     - name: Require Laravel Version
       run: >
         composer require
-        "laravel/framework:${{ matrix.laravel }}"
-        --no-interaction --no-update
+        "laravel/framework:^${{ matrix.laravel }}"
+        --no-interaction --no-update --with-all-dependencies
 
     - name: Install Composer dependencies
       run: composer update --${{ matrix.dependency-version }} --no-interaction --prefer-dist

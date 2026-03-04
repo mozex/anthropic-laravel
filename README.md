@@ -31,7 +31,7 @@ Thank you for considering sponsoring. Your support truly makes a difference!
 
 ## Get Started
 
-> **Requires [PHP 8.1+](https://php.net/releases/)**
+> **Requires [PHP 8.2+](https://www.php.net/releases/)**
 
 First, install Anthropic via the [Composer](https://getcomposer.org/) package manager:
 
