@@ -39,7 +39,7 @@ Small package with 6 source files in `src/`:
 
 **Config** (`config/anthropic.php`): `anthropic.api_key` (env `ANTHROPIC_API_KEY`), `anthropic.request_timeout` (env `ANTHROPIC_REQUEST_TIMEOUT`, default `30`).
 
-**Underlying client** (`mozex/anthropic-php`) exposes `->messages()` and `->completions()`.
+**Underlying client** (`mozex/anthropic-php`) exposes `->messages()`, `->completions()`, `->models()`, and `->batches()`.
 
 ## Code Conventions
 

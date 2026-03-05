@@ -2,8 +2,14 @@
 
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
+use Anthropic\Resources\Batches;
 use Anthropic\Resources\Completions;
+use Anthropic\Resources\Messages;
+use Anthropic\Resources\Models;
+use Anthropic\Responses\Batches\BatchResponse;
 use Anthropic\Responses\Completions\CreateResponse;
+use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
+use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
 use Illuminate\Config\Repository;
 use PHPUnit\Framework\ExpectationFailedException;
 
@@ -20,9 +26,10 @@ it('resolves resources', function () {
 
     Anthropic::setFacadeApplication($app);
 
-    $completions = Anthropic::completions();
-
-    expect($completions)->toBeInstanceOf(Completions::class);
+    expect(Anthropic::completions())->toBeInstanceOf(Completions::class)
+        ->and(Anthropic::messages())->toBeInstanceOf(Messages::class)
+        ->and(Anthropic::models())->toBeInstanceOf(Models::class)
+        ->and(Anthropic::batches())->toBeInstanceOf(Batches::class);
 });
 
 test('fake returns the given response', function () {
@@ -210,3 +217,96 @@ test('fake throws an exception if any request was sent when non was expected', f
 
     Anthropic::assertNothingSent();
 })->expectException(ExpectationFailedException::class);
+
+// Messages
+
+test('fake messages returns the given response', function () {
+    Anthropic::fake([
+        MessagesCreateResponse::fake([
+            'id' => 'msg_test',
+        ]),
+    ]);
+
+    $result = Anthropic::messages()->create([
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 1024,
+        'messages' => [
+            ['role' => 'user', 'content' => 'Hello!'],
+        ],
+    ]);
+
+    expect($result)->id->toBe('msg_test');
+});
+
+test('fake messages can assert a request was sent', function () {
+    Anthropic::fake([
+        MessagesCreateResponse::fake(),
+    ]);
+
+    Anthropic::messages()->create([
+        'model' => 'claude-sonnet-4-20250514',
+        'max_tokens' => 1024,
+        'messages' => [
+            ['role' => 'user', 'content' => 'Hello!'],
+        ],
+    ]);
+
+    Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
+        return $method === 'create' &&
+            $parameters['model'] === 'claude-sonnet-4-20250514';
+    });
+});
+
+// Models
+
+test('fake models returns the given response', function () {
+    Anthropic::fake([
+        ModelsListResponse::fake(),
+    ]);
+
+    $result = Anthropic::models()->list();
+
+    expect($result)->toBeInstanceOf(ModelsListResponse::class);
+});
+
+test('fake models can assert a request was sent', function () {
+    Anthropic::fake([
+        ModelsListResponse::fake(),
+    ]);
+
+    Anthropic::models()->list(['limit' => 10]);
+
+    Anthropic::assertSent(Models::class, function (string $method, array $parameters): bool {
+        return $method === 'list' &&
+            $parameters === ['limit' => 10];
+    });
+});
+
+// Batches
+
+test('fake batches returns the given response', function () {
+    Anthropic::fake([
+        BatchResponse::fake([
+            'id' => 'msgbatch_test',
+        ]),
+    ]);
+
+    $result = Anthropic::batches()->create([
+        'requests' => [],
+    ]);
+
+    expect($result)->id->toBe('msgbatch_test');
+});
+
+test('fake batches can assert a request was sent', function () {
+    Anthropic::fake([
+        BatchResponse::fake(),
+    ]);
+
+    Anthropic::batches()->retrieve('msgbatch_123');
+
+    Anthropic::assertSent(Batches::class, function (string $method, string $id): bool {
+        return $method === 'retrieve' &&
+            $id === 'msgbatch_123';
+    });
+});

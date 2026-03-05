@@ -31,7 +31,6 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
 
             return Anthropic::factory()
                 ->withApiKey($apiKey)
-                ->withHttpHeader('anthropic-version', '2023-06-01')
                 ->withHttpClient(new \GuzzleHttp\Client(['timeout' => config('anthropic.request_timeout', 30)]))
                 ->make();
         });

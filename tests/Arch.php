@@ -9,6 +9,7 @@ test('facades')
     ->toOnlyUse([
         'Illuminate\Support\Facades\Facade',
         'Anthropic\Contracts\ResponseContract',
+        'Anthropic\Contracts\ResponseStreamContract',
         'Anthropic\Laravel\Testing\AnthropicFake',
         'Anthropic\Responses\Completions\StreamResponse',
         'Anthropic\Responses\Messages\StreamResponse',
