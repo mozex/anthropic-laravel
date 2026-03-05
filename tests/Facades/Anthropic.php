@@ -228,7 +228,7 @@ test('fake messages returns the given response', function () {
     ]);
 
     $result = Anthropic::messages()->create([
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => 'claude-sonnet-4-6',
         'max_tokens' => 1024,
         'messages' => [
             ['role' => 'user', 'content' => 'Hello!'],
@@ -244,7 +244,7 @@ test('fake messages can assert a request was sent', function () {
     ]);
 
     Anthropic::messages()->create([
-        'model' => 'claude-sonnet-4-20250514',
+        'model' => 'claude-sonnet-4-6',
         'max_tokens' => 1024,
         'messages' => [
             ['role' => 'user', 'content' => 'Hello!'],
@@ -253,7 +253,7 @@ test('fake messages can assert a request was sent', function () {
 
     Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
         return $method === 'create' &&
-            $parameters['model'] === 'claude-sonnet-4-20250514';
+            $parameters['model'] === 'claude-sonnet-4-6';
     });
 });
 

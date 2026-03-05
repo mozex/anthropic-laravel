@@ -59,7 +59,7 @@ Finally, you may use the `Anthropic` facade to access the Anthropic API:
 use Anthropic\Laravel\Facades\Anthropic;
 
 $result = Anthropic::messages()->create([
-    'model' => 'claude-3-opus-20240229',
+    'model' => 'claude-sonnet-4-6',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
@@ -92,7 +92,33 @@ ANTHROPIC_REQUEST_TIMEOUT=
 
 ## Usage
 
-For usage examples, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
+For detailed usage examples, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
+
+The following resources are available through the `Anthropic` facade:
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+
+// Messages (primary API)
+Anthropic::messages()->create([...]);
+Anthropic::messages()->createStreamed([...]);
+Anthropic::messages()->countTokens([...]);
+
+// Models
+Anthropic::models()->list();
+Anthropic::models()->retrieve('claude-sonnet-4-6');
+
+// Message Batches
+Anthropic::batches()->create([...]);
+Anthropic::batches()->retrieve('msgbatch_...');
+Anthropic::batches()->list();
+Anthropic::batches()->cancel('msgbatch_...');
+Anthropic::batches()->delete('msgbatch_...');
+Anthropic::batches()->results('msgbatch_...');
+
+// Legacy Completions
+Anthropic::completions()->create([...]);
+```
 
 ## Testing
 
@@ -100,36 +126,56 @@ The `Anthropic` facade comes with a `fake()` method that allows you to fake the 
 
 The fake responses are returned in the order they are provided to the `fake()` method.
 
-All responses are having a `fake()` method that allows you to easily create a response object by only providing the parameters relevant for your test case.
+All responses have a `fake()` method that allows you to easily create a response object by only providing the parameters relevant for your test case.
 
 ```php
 use Anthropic\Laravel\Facades\Anthropic;
-use Anthropic\Responses\Completions\CreateResponse;
+use Anthropic\Resources\Messages;
+use Anthropic\Responses\Messages\CreateResponse;
 
 Anthropic::fake([
     CreateResponse::fake([
-        'completion' => 'awesome!',
+        'id' => 'msg_test',
     ]),
 ]);
 
-$completion = Anthropic::completions()->create([
-    'model' => 'claude-2.1',
-    'prompt' => '\n\nHuman: PHP is \n\nAssistant:',
-    'max_tokens_to_sample' => 100,
+$result = Anthropic::messages()->create([
+    'model' => 'claude-sonnet-4-6',
+    'max_tokens' => 1024,
+    'messages' => [
+        ['role' => 'user', 'content' => 'Hello!'],
+    ],
 ]);
 
-expect($completion['completion'])->toBe('awesome!');
+expect($result)->id->toBe('msg_test');
 ```
 
 After the requests have been sent there are various methods to ensure that the expected requests were sent:
 
 ```php
-// assert completion create request was sent
-Anthropic::assertSent(Completions::class, function (string $method, array $parameters): bool {
+// assert a messages create request was sent
+Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
     return $method === 'create' &&
-        $parameters['model'] === 'claude-2.1' &&
-        $parameters['prompt'] === 'PHP is ';
+        $parameters['model'] === 'claude-sonnet-4-6';
 });
+```
+
+You can also assert on specific resources:
+
+```php
+Anthropic::messages()->assertSent(function (string $method, array $parameters): bool {
+    return $method === 'create';
+});
+```
+
+Other available assertion methods:
+
+```php
+// assert that nothing was sent
+Anthropic::assertNothingSent();
+
+// assert that a specific resource was not called
+Anthropic::assertNotSent(Messages::class);
 ```
 
 For more testing examples, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php#testing) repository.

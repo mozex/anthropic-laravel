@@ -58,9 +58,9 @@ Architecture tests in `tests/Arch.php` enforce namespace dependency boundaries â
 
 Facade fake pattern:
 ```php
-Anthropic::fake([CreateResponse::fake(['completion' => 'awesome!'])]);
-$result = Anthropic::completions()->create([...]);
-Anthropic::assertSent(Completions::class, fn (string $method, array $parameters) => $method === 'create');
+Anthropic::fake([CreateResponse::fake(['id' => 'msg_test'])]);
+$result = Anthropic::messages()->create([...]);
+Anthropic::assertSent(Messages::class, fn (string $method, array $parameters) => $method === 'create');
 ```
 
 ## CI
