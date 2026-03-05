@@ -2,6 +2,14 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.3.2 - 2026-03-05
+
+* bump anthropic-php
+* update readme
+* sync version with anthropic-php
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.3.0...1.3.2
+
 ## 1.3.0 - 2026-03-04
 
 ### What's Changed
