@@ -6,7 +6,9 @@
     "authors": [
         {
             "name": "Mozex",
-            "email": "mozex@alphorld.com"
+            "email": "hello@mozex.dev",
+            "homepage": "https://mozex.dev",
+            "role": "Developer"
         }
     ],
     "require": {

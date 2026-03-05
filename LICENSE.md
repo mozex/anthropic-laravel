@@ -1,6 +1,6 @@
 The MIT License (MIT)
 
-Copyright (c) mozex <mozex@alphorld.com>
+Copyright (c) mozex <hello@mozex.dev>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
