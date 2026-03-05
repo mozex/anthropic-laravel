@@ -1,55 +1,56 @@
 name: Tests
 
-on: ['push', 'pull_request']
+on:
+  - push
+  - pull_request
 
 jobs:
   ci:
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: true
       matrix:
         os: [ubuntu-latest]
-        php: [ 8.2, 8.3, 8.4 ]
-        laravel: [ 11, 12 ]
-        pest: [ 3, 4 ]
+        php: [8.2, 8.3, 8.4]
+        laravel: [11, 12, 13]
+        pest: [3, 4]
         dependency-version: [prefer-lowest, prefer-stable]
         exclude:
           - php: 8.2
             pest: 4
+          - laravel: '13'
+            php: 8.2
 
     name: Tests P${{ matrix.php }} - P${{ matrix.pest }} - L${{ matrix.laravel }} - ${{ matrix.os }} - ${{ matrix.dependency-version }}
+
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-    - name: Checkout
-      uses: actions/checkout@v6
+      - name: Cache dependencies
+        uses: actions/cache@v5
+        with:
+          path: ~/.composer/cache/files
+          key: dependencies-php-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.dependency-version }}-composer-${{ hashFiles('composer.json') }}
 
-    - name: Cache dependencies
-      uses: actions/cache@v5
-      with:
-        path: ~/.composer/cache/files
-        key: dependencies-php-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.dependency-version }}-composer-${{ hashFiles('composer.json') }}
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: dom, mbstring, zip
+          coverage: none
 
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: ${{ matrix.php }}
-        extensions: dom, mbstring, zip
-        coverage: none
+      - name: Require Pest Version
+        run: |
+          composer require "pestphp/pest:^${{ matrix.pest }}" --no-interaction --no-update --with-all-dependencies
 
-    - name: Require Pest Version
-      run: >
-        composer require
-        "pestphp/pest:^${{ matrix.pest }}"
-        --no-interaction --no-update --with-all-dependencies
+      - name: Require Laravel Version
+        run: |
+          composer require "laravel/framework:^${{ matrix.laravel }}" --no-interaction --no-update --with-all-dependencies
 
-    - name: Require Laravel Version
-      run: >
-        composer require
-        "laravel/framework:^${{ matrix.laravel }}"
-        --no-interaction --no-update --with-all-dependencies
+      - name: Install Composer dependencies
+        run: composer update --${{ matrix.dependency-version }} --no-interaction --prefer-dist
 
-    - name: Install Composer dependencies
-      run: composer update --${{ matrix.dependency-version }} --no-interaction --prefer-dist
-
-    - name: Integration Tests
-      run: php ./vendor/bin/pest
+      - name: Integration Tests
+        run: php ./vendor/bin/pest

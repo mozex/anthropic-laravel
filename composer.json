@@ -1,7 +1,21 @@
 {
     "name": "mozex/anthropic-laravel",
     "description": "Anthropic PHP for Laravel is a supercharged PHP API client that allows you to interact with the Anthropic API",
-    "keywords": ["laravel", "php", "anthropic", "sdk", "claude", "Claude-3-Opus", "Claude-3-Sonnet", "Claude-3-Haiku", "api", "client", "natural", "language", "processing"],
+    "keywords": [
+        "laravel",
+        "php",
+        "anthropic",
+        "sdk",
+        "claude",
+        "Claude-3-Opus",
+        "Claude-3-Sonnet",
+        "Claude-3-Haiku",
+        "api",
+        "client",
+        "natural",
+        "language",
+        "processing"
+    ],
     "license": "MIT",
     "authors": [
         {
@@ -14,7 +28,7 @@
     "require": {
         "php": "^8.2.0",
         "guzzlehttp/guzzle": "^7.9.3",
-        "laravel/framework": "^11.29|^12.12",
+        "laravel/framework": "^11.29|^12.12|^13.0",
         "mozex/anthropic-php": "^1.3.2"
     },
     "require-dev": {
