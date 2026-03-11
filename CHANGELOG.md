@@ -2,6 +2,19 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.3.3 - 2026-03-05
+
+### What's Changed
+
+* Laravel 13.x Compatibility by @laravel-shift in https://github.com/mozex/anthropic-laravel/pull/12
+* updated model names for consistency
+
+### New Contributors
+
+* @laravel-shift made their first contribution in https://github.com/mozex/anthropic-laravel/pull/12
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.3.2...1.3.3
+
 ## 1.3.2 - 2026-03-05
 
 * bump anthropic-php
