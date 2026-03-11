@@ -10,7 +10,7 @@
 
 ## Table of Contents
 
-- [Support Us](#support-us)
+- [Support This Project](#support-this-project)
 - [Get Started](#get-started)
 - [Configuration](#configuration)
 - [Usage](#usage)
@@ -21,13 +21,13 @@
 - [Credits](#credits)
 - [License](#license)
 
-## Support us
+## Support This Project
 
-Creating and maintaining open-source projects requires significant time and effort. Your support will help enhance the project and enable further contributions to the PHP community.
+I maintain this package along with [several other open-source PHP packages](https://github.com/mozex?tab=repositories&q=&type=source) used by thousands of developers every day.
 
-Sponsorship can be made through the [GitHub Sponsors](https://github.com/sponsors/mozex) program. Just click the "**[Sponsor](https://github.com/sponsors/mozex)**" button at the top of this repository. Any amount is greatly appreciated, even a contribution as small as $1 can make a big difference and will go directly towards developing and improving this package.
+If my packages save you time or help your business, consider [**sponsoring my work on GitHub Sponsors**](https://github.com/sponsors/mozex). Your support lets me keep these packages updated, respond to issues quickly, and ship new features.
 
-Thank you for considering sponsoring. Your support truly makes a difference!
+Business sponsors get logo placement in package READMEs. [**See sponsorship tiers →**](https://github.com/sponsors/mozex)
 
 ## Get Started
 
