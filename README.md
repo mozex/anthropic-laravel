@@ -8,8 +8,38 @@
 
 > **Note:** This repository contains the integration code of the **Anthropic PHP** for Laravel. If you want to use the **Anthropic PHP** client in a framework-agnostic way, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
 
+## Why Anthropic Laravel?
+
+With the official Anthropic SDK and Laravel's own AI SDK available, you might wonder which to use. Here's how they compare:
+
+| | **Anthropic Laravel** | **Laravel AI SDK** | **Official Anthropic SDK** |
+|---|---|---|---|
+| **Anthropic API coverage** | Full — messages, streaming, tool use, vision, batches, models, extended thinking, token counting | Unified API across providers — covers core features | Full |
+| **Multi-provider support** | Anthropic only | OpenAI, Anthropic, Gemini, Groq, xAI | Anthropic only |
+| **Laravel integration** | Facade, config publishing, service provider, testing fakes | Native — agents, queuing, conversation memory | None — framework-agnostic |
+| **Laravel version support** | 11+ | 12+ | Any (no Laravel dependency) |
+| **PHP version** | 8.2+ | 8.3+ | 8.1+ |
+| **New Anthropic features** | Same-day support | Follows unified release cycle | Same-day support |
+
+### Choose Anthropic Laravel when you:
+
+- Need **full access to every Anthropic API feature** — including batches, extended thinking, token counting, and model management
+- Want a **Laravel-native experience** (Facades, config, testing) without sacrificing API depth
+- Are on **Laravel 11** (Laravel AI SDK requires 12+)
+- Want **same-day support** when Anthropic ships new features
+- Prefer a **thin, focused wrapper** over a multi-provider abstraction
+
+### Choose Laravel AI SDK when you:
+
+- Need to **switch between AI providers** (OpenAI, Gemini, etc.) with one codebase
+- Want built-in **agent architecture** with conversation memory and provider failover
+- Are building a new **Laravel 12+** project and don't need Anthropic-specific features
+
+Both packages can coexist — use Laravel AI SDK for multi-provider features and Anthropic Laravel for deep Anthropic integration.
+
 ## Table of Contents
 
+- [Why Anthropic Laravel?](#why-anthropic-laravel)
 - [Support This Project](#support-this-project)
 - [Get Started](#get-started)
 - [Configuration](#configuration)
