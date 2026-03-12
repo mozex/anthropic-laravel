@@ -4,7 +4,7 @@
 [![Total Downloads](https://img.shields.io/packagist/dt/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
 
 ------
-**Anthropic Laravel** is a community-maintained PHP API client that allows you to interact with the [Anthropic API](https://docs.anthropic.com/claude/docs/intro-to-claude). This package is based on the excellent work of [Nuno Maduro](https://github.com/nunomaduro) and [Sandro Gehri](https://github.com/gehrisandro).
+**Anthropic Laravel** is a community-maintained PHP API client that allows you to interact with the [Anthropic API](https://docs.anthropic.com/claude/docs/intro-to-claude).
 
 > **Note:** This repository contains the integration code of the **Anthropic PHP** for Laravel. If you want to use the **Anthropic PHP** client in a framework-agnostic way, take a look at the [mozex/anthropic-php](https://github.com/mozex/anthropic-php) repository.
 
@@ -225,6 +225,7 @@ Please review [our security policy](../../security/policy) on how to report secu
 ## Credits
 
 - [Mozex](https://github.com/mozex)
+- [Nuno Maduro](https://github.com/nunomaduro) and [Sandro Gehri](https://github.com/gehrisandro) for their work on [openai-php](https://github.com/openai-php/client), which inspired this package
 - [All Contributors](../../contributors)
 
 ## License
