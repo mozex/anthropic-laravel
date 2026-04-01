@@ -2,6 +2,13 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.4.0 - 2026-04-01
+
+* Expand README to document new Anthropic features and improved testing controls
+* bump mozex/anthropic-php dependency
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.3.3...1.4.0
+
 ## 1.3.3 - 2026-03-05
 
 ### What's Changed
