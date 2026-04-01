@@ -14,16 +14,18 @@ With the official Anthropic SDK and Laravel's own AI SDK available, you might wo
 
 | | **Anthropic Laravel** | **Laravel AI SDK** | **Official Anthropic SDK** |
 |---|---|---|---|
-| **Anthropic API coverage** | Full — messages, streaming, tool use, vision, batches, models, extended thinking, token counting | Unified API across providers — covers core features | Full |
+| **Anthropic API coverage** | Full — messages, streaming, tool use, vision, batches, models, adaptive thinking, web search, code execution, citations, token counting | Unified API across providers — covers core features | Full |
 | **Multi-provider support** | Anthropic only | OpenAI, Anthropic, Gemini, Groq, xAI | Anthropic only |
-| **Laravel integration** | Facade, config publishing, service provider, testing fakes | Native — agents, queuing, conversation memory | None — framework-agnostic |
+| **Laravel integration** | Facade, config publishing, service provider | Native — agents, queuing, conversation memory | None — framework-agnostic |
+| **Testing** | `Anthropic::fake()` with per-resource assertions, full parameter inspection, and response mocking at the API level | Higher-level fakes per capability — no direct API parameter assertions | None built-in |
 | **Laravel version support** | 11+ | 12+ | Any (no Laravel dependency) |
 | **PHP version** | 8.2+ | 8.3+ | 8.1+ |
 | **New Anthropic features** | Same-day support | Follows unified release cycle | Same-day support |
 
 ### Choose Anthropic Laravel when you:
 
-- Need **full access to every Anthropic API feature** — including batches, extended thinking, token counting, and model management
+- Need **full access to every Anthropic API feature** — including batches, adaptive thinking, web search, code execution, citations, token counting, and model management
+- Want **granular test control** — `Anthropic::fake()` lets you mock exact API responses and assert on specific resource methods and parameters, something no other Laravel integration offers at this level
 - Want a **Laravel-native experience** (Facades, config, testing) without sacrificing API depth
 - Are on **Laravel 11** (Laravel AI SDK requires 12+)
 - Want **same-day support** when Anthropic ships new features
@@ -44,6 +46,8 @@ Both packages can coexist — use Laravel AI SDK for multi-provider features and
 - [Get Started](#get-started)
 - [Configuration](#configuration)
 - [Usage](#usage)
+  - [Adaptive Thinking](#adaptive-thinking)
+  - [Web Search](#web-search)
 - [Testing](#testing)
 - [Changelog](#changelog)
 - [Contributing](#contributing)
@@ -148,6 +152,45 @@ Anthropic::batches()->results('msgbatch_...');
 
 // Legacy Completions
 Anthropic::completions()->create([...]);
+```
+
+### Adaptive Thinking
+
+Use adaptive thinking to let Claude adjust its reasoning depth dynamically:
+
+```php
+$result = Anthropic::messages()->create([
+    'model' => 'claude-opus-4-6',
+    'max_tokens' => 16000,
+    'temperature' => 1, // required for thinking
+    'thinking' => [
+        'type' => 'enabled',
+        'budget_tokens' => 10000,
+    ],
+    'messages' => [
+        ['role' => 'user', 'content' => 'Explain quantum entanglement.'],
+    ],
+]);
+```
+
+### Web Search
+
+Enable Claude to search the web and cite sources in its responses:
+
+```php
+$result = Anthropic::messages()->create([
+    'model' => 'claude-sonnet-4-6',
+    'max_tokens' => 1024,
+    'tools' => [
+        [
+            'type' => 'web_search_20250305',
+            'name' => 'web_search',
+        ],
+    ],
+    'messages' => [
+        ['role' => 'user', 'content' => 'What are the latest developments in fusion energy?'],
+    ],
+]);
 ```
 
 ## Testing
