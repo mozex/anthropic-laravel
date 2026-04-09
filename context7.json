@@ -1,0 +1,8 @@
+{
+    "$schema": "https://context7.com/schema/context7.json",
+    "url": "https://context7.com/mozex/anthropic-laravel",
+    "public_key": "pk_2dXAZIEpHP6qQeGGTuyQt",
+    "projectTitle": "Anthropic Laravel",
+    "description": "Laravel integration for the Anthropic Claude API — facades, config publishing, testing fakes, and seamless access to messages, streaming, and tool use.",
+    "folders": []
+}
