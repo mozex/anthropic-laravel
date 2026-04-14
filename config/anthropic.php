@@ -9,7 +9,7 @@ return [
     |
     | Here you may specify your Anthropic API Key. This will be used to authenticate
     | with the Anthropic API - you can find your API key on your Anthropic
-    | dashboard, at https://console.anthropic.com/settings/keys.
+    | dashboard, at https://platform.claude.com/settings/keys.
     */
 
     'api_key' => env('ANTHROPIC_API_KEY'),
