@@ -1,6 +1,6 @@
 {
     "name": "mozex/anthropic-laravel",
-    "description": "Laravel integration for the Anthropic Claude API — facades, config publishing, testing fakes, and seamless access to messages, streaming, and tool use.",
+    "description": "Laravel integration for the Anthropic API: facade, config publishing, install command, testing fakes, messages, streaming, tool use, thinking, and batches.",
     "keywords": [
         "laravel",
         "php",
@@ -11,9 +11,9 @@
         "client",
         "ai",
         "llm",
-        "nlp",
-        "chatbot",
         "streaming",
+        "tool-use",
+        "thinking",
         "generative-ai",
         "text-generation",
         "claude-opus",
