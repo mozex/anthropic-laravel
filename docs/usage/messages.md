@@ -206,6 +206,65 @@ class AskClaudeJob implements ShouldQueue
 
 Bump `ANTHROPIC_REQUEST_TIMEOUT` in your `.env` to match the expected response time so the HTTP client doesn't cut the request short.
 
+## Handling refusals
+
+When safety classifiers block a response, `stop_reason` comes back as `'refusal'` and `stop_details` explains why. The response is still a valid 200, so handle it like any branch in your controller or job:
+
+```php
+$response = Anthropic::messages()->create([...]);
+
+if ($response->stop_reason === 'refusal') {
+    Log::warning('Claude refused request', [
+        'user_id' => auth()->id(),
+        'category' => $response->stop_details->category,    // 'cyber', 'bio', or null
+        'explanation' => $response->stop_details->explanation,
+    ]);
+
+    return back()->with('error', 'Your request could not be processed.');
+}
+```
+
+`stop_details` is `null` on normal completions, so only touch it when `stop_reason === 'refusal'`. Treat `category` as the machine-readable signal; the `explanation` text isn't stable between calls.
+
+## The `pause_turn` stop reason
+
+Long-running turns can come back as `stop_reason: 'pause_turn'` instead of `'end_turn'`. Send the response back as the next assistant message to let Claude continue. This fits naturally in a queued job:
+
+```php
+class ContinueClaudeJob implements ShouldQueue
+{
+    public function handle(): void
+    {
+        $messages = $this->conversation->messagesArray();
+
+        do {
+            $response = Anthropic::messages()->create([
+                'model' => 'claude-sonnet-4-6',
+                'max_tokens' => 8192,
+                'messages' => $messages,
+            ]);
+
+            $messages[] = [
+                'role' => 'assistant',
+                'content' => array_map(fn ($block) => $block->toArray(), $response->content),
+            ];
+        } while ($response->stop_reason === 'pause_turn');
+
+        $this->conversation->persistFinalResponse($response);
+    }
+}
+```
+
+No special parameter is needed to resume; just echo the paused content back.
+
+## Inference region
+
+`usage->inferenceGeo` tells you which region handled the request, useful for residency logs or regional routing decisions:
+
+```php
+$response->usage->inferenceGeo; // 'us', 'eu', or null
+```
+
 ## Passing any parameter
 
 This package doesn't validate or transform request parameters. Anything you pass in the array goes directly to the Anthropic API. New API parameters work immediately, before the package adds explicit support:

@@ -113,6 +113,22 @@ $response = Anthropic::messages()->create([
 ]);
 ```
 
+### Files written inside the container
+
+When Claude writes a file during code execution, a `container_upload` block appears in the response with the stored file's ID:
+
+```php
+foreach ($response->content as $block) {
+    if ($block->type === 'container_upload') {
+        $conversation->generatedFiles()->create([
+            'anthropic_file_id' => $block->file_id,
+        ]);
+    }
+}
+```
+
+Pair the `file_id` with the [Files API](https://platform.claude.com/docs/en/api/files) to download the contents when you need to hand the file off to a user or forward it to your own storage disk.
+
 ## Usage tracking
 
 Server tool usage is billed separately from tokens. Check the counts:

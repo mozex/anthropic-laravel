@@ -109,7 +109,7 @@ $toolRegistry = [
 ];
 
 foreach ($response->content as $block) {
-    if ($block->type === 'tool_use') {
+    if ($block->type === 'tool_use' && $block->caller?->type === 'direct') {
         $service = app($toolRegistry[$block->name]);
         $result = $service->handle($block->input);
 
@@ -123,6 +123,8 @@ foreach ($response->content as $block) {
 ```
 
 Each service handles one tool. The dispatcher finds the right class via the container, which means you get full dependency injection, interfaces, and testability.
+
+The `caller?->type === 'direct'` check matters once you mix custom tools with server tools like code execution. Claude can invoke your tools indirectly from inside a code execution sandbox, in which case `caller->type` is a date-versioned identifier like `'code_execution_20260120'` and Anthropic has already handled the call. Running it again would duplicate the work.
 
 ## Error results
 
