@@ -13,9 +13,11 @@ use Anthropic\Laravel\Facades\Anthropic;
 $response = Anthropic::models()->list();
 
 foreach ($response->data as $model) {
-    $model->id;          // 'claude-sonnet-4-6'
-    $model->displayName; // 'Claude Sonnet 4.6'
-    $model->createdAt;   // '2025-05-14T00:00:00Z'
+    $model->id;             // 'claude-sonnet-4-6'
+    $model->displayName;    // 'Claude Sonnet 4.6'
+    $model->createdAt;      // '2025-05-14T00:00:00Z'
+    $model->maxInputTokens; // 200000
+    $model->maxTokens;      // 64000
 }
 ```
 
@@ -66,9 +68,54 @@ $models = Cache::remember('anthropic.models', now()->addHour(), function () {
 ```php
 $response = Anthropic::models()->retrieve('claude-sonnet-4-6');
 
-$response->id;          // 'claude-sonnet-4-6'
-$response->displayName; // 'Claude Sonnet 4.6'
-$response->createdAt;   // '2025-05-14T00:00:00Z'
+$response->id;             // 'claude-sonnet-4-6'
+$response->displayName;    // 'Claude Sonnet 4.6'
+$response->createdAt;      // '2025-05-14T00:00:00Z'
+$response->maxInputTokens; // 200000
+$response->maxTokens;      // 64000
+```
+
+## Capabilities
+
+Each model reports what it supports through a `capabilities` object. The common fields are typed:
+
+```php
+$model = Anthropic::models()->retrieve('claude-sonnet-4-6');
+
+$model->capabilities->batch->supported;
+$model->capabilities->citations->supported;
+$model->capabilities->codeExecution->supported;
+$model->capabilities->imageInput->supported;
+$model->capabilities->pdfInput->supported;
+$model->capabilities->structuredOutputs->supported;
+$model->capabilities->thinking->supported;
+```
+
+Context management strategies are date-versioned and exposed as a map, so new versions Anthropic ships show up without a package update:
+
+```php
+foreach ($model->capabilities->contextManagement->strategies as $name => $strategy) {
+    $name;                // 'clear_thinking_20251015'
+    $strategy->supported; // true
+}
+```
+
+A practical Laravel-flavored pattern: pick a model at runtime based on what your feature needs.
+
+```php
+use Illuminate\Support\Facades\Cache;
+
+$model = Cache::remember('anthropic.pdf_model', now()->addDay(), function () {
+    $models = Anthropic::models()->list()->data;
+
+    foreach ($models as $model) {
+        if ($model->capabilities->pdfInput->supported) {
+            return $model->id;
+        }
+    }
+
+    return 'claude-sonnet-4-6';
+});
 ```
 
 ---
