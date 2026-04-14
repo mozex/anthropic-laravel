@@ -54,6 +54,32 @@ $meta->outputTokenLimit->limit;
 $meta->outputTokenLimit->remaining;
 ```
 
+### Priority Tier limits
+
+If your organization is on [Priority Tier](https://platform.claude.com/docs/en/api/service-tiers), two extra rate-limit buckets appear as typed properties. They stay `null` when the request didn't draw from Priority capacity:
+
+```php
+$meta->priorityInputTokenLimit?->limit;
+$meta->priorityInputTokenLimit?->remaining;
+$meta->priorityInputTokenLimit?->reset;
+
+$meta->priorityOutputTokenLimit?->limit;
+$meta->priorityOutputTokenLimit?->remaining;
+$meta->priorityOutputTokenLimit?->reset;
+```
+
+Useful for monitoring whether a request actually hit your Priority allocation or spilled into the shared standard pool. A quick Laravel-flavored check:
+
+```php
+$meta = $response->meta();
+
+if ($meta->priorityInputTokenLimit === null) {
+    Log::warning('Claude request did not use Priority Tier', [
+        'request_id' => $meta->requestId,
+    ]);
+}
+```
+
 ## Throttling based on remaining limits
 
 If you're doing high-volume work, check the remaining requests and throttle before you hit a 429:
