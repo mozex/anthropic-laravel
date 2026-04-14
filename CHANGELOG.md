@@ -2,6 +2,31 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.5.0 - 2026-04-14
+
+### What's Changed
+
+#### Added
+
+**Laravel Boost skill**
+
+- Ship a Laravel Boost skill at `resources/boost/skills/anthropic-laravel/SKILL.md` so AI coding assistants pick up package conventions automatically when working in a Laravel project. Activates on any mention of the `Anthropic` facade, the underlying SDK classes, or Claude-related work.
+- Covers the full surface: messages, streaming, tool use, extended thinking, web search, code execution, citations, batches, token counting, models, testing with `Anthropic::fake()`, and error handling with the queue-retry pattern.
+- Calls out the five gotchas that actually cause bugs: inconsistent property casing across DTOs, the `caller?->type === 'direct'` filter required in tool dispatchers, `pause_turn` resume semantics, refusal responses arriving with HTTP 200, and mid-stream errors throwing after the response started.
+- Designed for progressive disclosure: keeps Laravel patterns and pitfalls in full, defers exhaustive reference material to Context7 (`/mozex/anthropic-laravel`, `/mozex/anthropic-php`) or direct fetches from the docs site, both of which serve markdown for AI agents.
+
+**Documentation site**
+
+- Ship the full documentation at [mozex.dev/docs/anthropic-laravel/v1](https://mozex.dev/docs/anthropic-laravel/v1) with dedicated pages for every feature: introduction, configuration, messages, streaming, tool use, thinking, server tools, citations, token counting, models, batches, completions, meta information, error handling, and testing.
+- Every page leads with Laravel-idiomatic examples: Facade calls, `ShouldQueue` jobs, `Cache::remember` for the model list, `Storage::disk` for vision and PDF citations, broadcasting from streamed responses, scheduled commands for batch polling, and `bootstrap/app.php` `reportable()` callbacks for silencing overload errors.
+- Each page links back to the matching page in the [PHP SDK docs](https://mozex.dev/docs/anthropic-php/v1) for deeper schema reference, so the Laravel docs stay focused on the 80% Laravel path without duplicating SDK material.
+
+#### Improved
+
+- Bump `mozex/anthropic-php` to `^1.5.0`. All API additions land transparently through the `Anthropic` facade: the `caller` object on tool blocks, `container_upload` blocks, `stop_details` on refusals, the typed model `capabilities` tree, `inferenceGeo` on usage, and Priority Tier rate-limit headers as typed properties on `MetaInformation`. See the [PHP 1.5.0 release notes](https://github.com/mozex/anthropic-php/releases/tag/1.5.0) for the full feature list.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.4.0...1.5.0
+
 ## 1.4.0 - 2026-04-01
 
 * Expand README to document new Anthropic features and improved testing controls
