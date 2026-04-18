@@ -2,6 +2,14 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.6.0 - 2026-04-18
+
+### What's Changed
+
+* Add Anthropic beta header support
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.5.0...1.6.0
+
 ## 1.5.0 - 2026-04-14
 
 ### What's Changed
