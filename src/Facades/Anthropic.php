@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Anthropic\Resources\Messages messages()
  * @method static \Anthropic\Resources\Models models()
  * @method static \Anthropic\Resources\Batches batches()
+ * @method static \Anthropic\Resources\Files files()
  */
 final class Anthropic extends Facade
 {

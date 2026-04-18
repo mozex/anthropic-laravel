@@ -49,6 +49,9 @@ Every response class has a `fake()` method with sensible defaults:
 | `Batches\BatchListResponse::fake()` | Batch list |
 | `Batches\BatchResultResponse::fake()` | Batch results |
 | `Batches\DeletedBatchResponse::fake()` | Batch delete |
+| `Files\FileResponse::fake()` | Files upload/retrieve metadata |
+| `Files\FileListResponse::fake()` | Files list |
+| `Files\DeletedFileResponse::fake()` | Files delete |
 
 Override only the fields you care about. Everything else gets default values:
 

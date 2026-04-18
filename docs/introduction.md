@@ -5,13 +5,13 @@ weight: 0
 
 Anthropic Laravel is the Laravel wrapper for [Anthropic PHP](https://mozex.dev/docs/anthropic-php/v1), the community-maintained PHP SDK for the [Anthropic API](https://platform.claude.com/docs/en/about-claude/models/overview). It gives you a Laravel-native way to talk to Claude: a Facade, a publishable config, an install command, and a testing integration that plugs into the service container.
 
-Under the hood, every request is handled by the underlying PHP package, so you get full access to every Anthropic API feature (messages, streaming, tool use, extended thinking, web search, code execution, citations, token counting, and batches) without the framework-agnostic boilerplate.
+Under the hood, every request is handled by the underlying PHP package, so you get full access to every Anthropic API feature (messages, streaming, tool use, extended thinking, web search, code execution, citations, token counting, batches, and files) without the framework-agnostic boilerplate.
 
 > **Not using Laravel?** Use the framework-agnostic [Anthropic PHP](https://github.com/mozex/anthropic-php) package directly.
 
 ## Why this package
 
-**One Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::completions()`. No factory setup, no client instantiation. The service provider handles it.
+**One Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, `Anthropic::completions()`. No factory setup, no client instantiation. The service provider handles it.
 
 **Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env`, and you're ready to go.
 
@@ -121,6 +121,7 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Token Counting](./usage/token-counting.md): Count tokens before sending
 - [Models](./usage/models.md): List and inspect available models
 - [Batches](./usage/batches.md): Process large volumes of requests asynchronously
+- [Files](./usage/files.md): Upload documents once, reference them by `file_id` in later requests
 - [Completions](./usage/completions.md): Legacy Text Completions API
 
 **Reference** covers cross-cutting concerns:

@@ -4,10 +4,13 @@ use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
 use Anthropic\Resources\Completions;
+use Anthropic\Resources\Files;
 use Anthropic\Resources\Messages;
 use Anthropic\Resources\Models;
 use Anthropic\Responses\Batches\BatchResponse;
 use Anthropic\Responses\Completions\CreateResponse;
+use Anthropic\Responses\Files\DeletedFileResponse;
+use Anthropic\Responses\Files\FileResponse;
 use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
 use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
 use Illuminate\Config\Repository;
@@ -29,7 +32,8 @@ it('resolves resources', function () {
     expect(Anthropic::completions())->toBeInstanceOf(Completions::class)
         ->and(Anthropic::messages())->toBeInstanceOf(Messages::class)
         ->and(Anthropic::models())->toBeInstanceOf(Models::class)
-        ->and(Anthropic::batches())->toBeInstanceOf(Batches::class);
+        ->and(Anthropic::batches())->toBeInstanceOf(Batches::class)
+        ->and(Anthropic::files())->toBeInstanceOf(Files::class);
 });
 
 test('fake returns the given response', function () {
@@ -308,5 +312,34 @@ test('fake batches can assert a request was sent', function () {
     Anthropic::assertSent(Batches::class, function (string $method, string $id): bool {
         return $method === 'retrieve' &&
             $id === 'msgbatch_123';
+    });
+});
+
+// Files
+
+test('fake files returns the given response', function () {
+    Anthropic::fake([
+        FileResponse::fake([
+            'id' => 'file_test',
+        ]),
+    ]);
+
+    $result = Anthropic::files()->upload([
+        'file' => 'bytes',
+    ]);
+
+    expect($result)->id->toBe('file_test');
+});
+
+test('fake files can assert a request was sent', function () {
+    Anthropic::fake([
+        DeletedFileResponse::fake(),
+    ]);
+
+    Anthropic::files()->delete('file_011CNha8iCJcU1wXNR6q4V8w');
+
+    Anthropic::assertSent(Files::class, function (string $method, string $id): bool {
+        return $method === 'delete' &&
+            $id === 'file_011CNha8iCJcU1wXNR6q4V8w';
     });
 });

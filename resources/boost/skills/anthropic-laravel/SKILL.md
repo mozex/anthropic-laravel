@@ -1,6 +1,6 @@
 ---
 name: anthropic-laravel
-description: Use when writing Laravel code that calls the Anthropic Claude API through the `mozex/anthropic-laravel` package. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::fake()`, `CreateResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project. Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), extended thinking, web search, code execution, document citations, bulk processing with batches, token counting before sending, or testing code that calls the API. This skill covers the Laravel wrapper plus the underlying `mozex/anthropic-php` SDK response shapes and conventions, so it's the right one to use whether the user is writing a controller, a queued job, a Livewire component, or direct PHP SDK code in a Laravel project. For exhaustive reference material (every content block type, every capability flag, every result block variant), fetch Context7 libraries `/mozex/anthropic-laravel` or `/mozex/anthropic-php` on demand rather than guessing.
+description: Use when writing Laravel code that calls the Anthropic Claude API through the `mozex/anthropic-laravel` package. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project. Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), extended thinking, web search, code execution, document citations, bulk processing with batches, uploading and referencing files by `file_id`, token counting before sending, or testing code that calls the API. This skill covers the Laravel wrapper plus the underlying `mozex/anthropic-php` SDK response shapes and conventions, so it's the right one to use whether the user is writing a controller, a queued job, a Livewire component, or direct PHP SDK code in a Laravel project. For exhaustive reference material (every content block type, every capability flag, every result block variant), fetch Context7 libraries `/mozex/anthropic-laravel` or `/mozex/anthropic-php` on demand rather than guessing.
 ---
 
 # Anthropic Laravel
@@ -56,6 +56,7 @@ use Anthropic\Laravel\Facades\Anthropic;
 Anthropic::messages();     // Messages resource
 Anthropic::batches();      // Message Batches
 Anthropic::models();       // Models
+Anthropic::files();        // Files (upload, list, download, delete)
 Anthropic::completions();  // Legacy Text Completions
 ```
 
@@ -76,7 +77,7 @@ DTO casing matches the wire format from the API, so different response shapes us
 | Content blocks | snake_case | `$block->type`, `$block->tool_use_id`, `$block->partial_json` |
 | Stream event DTOs | snake_case | `$event->content_block_start`, `$event->delta` |
 | `CountTokensResponse` | camelCase | `$r->inputTokens` |
-| Batch / Models responses | camelCase | `$r->processingStatus`, `$r->requestCounts`, `$r->displayName`, `$r->maxInputTokens` |
+| Batch / Models / Files responses | camelCase | `$r->processingStatus`, `$r->requestCounts`, `$r->displayName`, `$r->maxInputTokens`, `$r->mimeType`, `$r->sizeBytes` |
 
 When in doubt, `dump($response)` or consult `/mozex/anthropic-php` via Context7 or the docs site. Guessing usually produces `PropertyNotFound` errors at runtime.
 
@@ -399,6 +400,45 @@ foreach (Anthropic::batches()->results($id) as $individual) {
     }
 }
 ```
+
+## Files
+
+Upload once, reference by `file_id` on later Messages calls. Good for repeated PDFs/images and for reading outputs the code execution tool or Skills produce. Anthropic flags it beta; the SDK auto-injects `anthropic-beta: files-api-2025-04-14` on every `Anthropic::files()` call, so callers do nothing.
+
+```php
+$file = Anthropic::files()->upload(['file' => Storage::disk('local')->readStream('doc.pdf')]);
+Anthropic::files()->list(['limit' => 100]);
+Anthropic::files()->retrieveMetadata($fileId);
+Anthropic::files()->download($fileId);  // raw bytes, only for skills/code-execution outputs
+Anthropic::files()->delete($fileId);
+```
+
+`FileResponse` fields: `id`, `type`, `filename`, `mimeType`, `sizeBytes`, `createdAt`, `downloadable` (nullable bool), `scope` (nullable `FileResponseScope` with `id` and `type: 'session'`).
+
+**Gotcha: referencing a `file_id` in a Messages call needs the beta on the Messages request too.** Messages is not Files-specific so the SDK doesn't auto-inject there. Pass `'betas' => ['files-api-2025-04-14']` on the Messages call, or set it globally in `config('anthropic.beta')` if every Messages call in the app references files.
+
+```php
+Anthropic::messages()->create([
+    'model' => 'claude-opus-4-6',
+    'max_tokens' => 1024,
+    'betas' => ['files-api-2025-04-14'],
+    'messages' => [[
+        'role' => 'user',
+        'content' => [
+            ['type' => 'text', 'text' => 'Summarise this.'],
+            ['type' => 'document', 'source' => ['type' => 'file', 'file_id' => $file->id]],
+        ],
+    ]],
+]);
+```
+
+Block pairing: PDFs and plain text go into `document` blocks; images (`image/jpeg|png|gif|webp`) go into `image` blocks; code execution inputs (CSV, XLSX, JSON, etc.) go into `container_upload` blocks.
+
+User-uploaded files are NOT downloadable (`downloadable: false`). `download()` only works on files produced by Skills or code execution; calling it on a user upload throws `ErrorException` with type `invalid_request_error`.
+
+Typical Laravel pattern: store `anthropic_file_id` on an Eloquent model. When done with the file, call `Anthropic::files()->delete($id)` and null the column. For large downloads, queue a job that streams the bytes to S3.
+
+Rate limit: ~100 Files calls per minute per org. Throttle with `RateLimiter::for('anthropic-files', fn () => Limit::perMinute(90))` and a `RateLimited('anthropic-files')` middleware on the job.
 
 ## Error handling
 

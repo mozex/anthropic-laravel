@@ -25,6 +25,7 @@ Laravel wrapper for [Anthropic PHP](https://github.com/mozex/anthropic-php), the
   - [Token Counting](https://mozex.dev/docs/anthropic-laravel/v1/usage/token-counting)
   - [Models](https://mozex.dev/docs/anthropic-laravel/v1/usage/models)
   - [Batches](https://mozex.dev/docs/anthropic-laravel/v1/usage/batches)
+  - [Files](https://mozex.dev/docs/anthropic-laravel/v1/usage/files)
   - [Completions](https://mozex.dev/docs/anthropic-laravel/v1/usage/completions)
 - Reference
   - [Configuration](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration)
@@ -42,7 +43,7 @@ Business sponsors get logo placement in package READMEs. [**See sponsorship tier
 
 ## Why This Package
 
-**`Anthropic::` Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::completions()`. No client instantiation, no factory setup. The service provider handles it.
+**`Anthropic::` Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, `Anthropic::completions()`. No client instantiation, no factory setup. The service provider handles it.
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake, queue responses, and assert exactly which requests were sent. Pairs with Laravel's existing testing idioms like `Event::fake()` and `Queue::fake()`. [See the testing docs →](https://mozex.dev/docs/anthropic-laravel/v1/reference/testing)
 
