@@ -2,6 +2,58 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.7.0 - 2026-04-18
+
+### What's Changed
+
+#### Added
+
+**Files API**
+
+- `Anthropic::files()` exposes the full Files resource: `upload`, `list`, `retrieveMetadata`, `download`, `delete`. Upload a document once and reference it by `file_id` in later Messages calls, or read outputs produced by the code execution tool and Skills.
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+use Illuminate\Support\Facades\Storage;
+
+$file = Anthropic::files()->upload([
+    'file' => Storage::disk('local')->readStream('doc.pdf'),
+]);
+
+$response = Anthropic::messages()->create([
+    'model' => 'claude-opus-4-6',
+    'max_tokens' => 1024,
+    'betas' => ['files-api-2025-04-14'],
+    'messages' => [[
+        'role' => 'user',
+        'content' => [
+            ['type' => 'text', 'text' => 'Summarise this.'],
+            ['type' => 'document', 'source' => ['type' => 'file', 'file_id' => $file->id]],
+        ],
+    ]],
+]);
+
+```
+- Anthropic currently flags this endpoint as beta. The SDK auto-injects the required `anthropic-beta: files-api-2025-04-14` header on every `Anthropic::files()` call, so there's nothing to configure. When you reference a `file_id` inside a Messages call, pass `'betas' => ['files-api-2025-04-14']` on the Messages call as well; the Messages endpoint also needs the header when a file is referenced. If every Messages call in your app references uploaded files, put the beta globally via `config('anthropic.beta')` instead.
+
+**Testing**
+
+- `FileResponse::fake()`, `FileListResponse::fake()`, and `DeletedFileResponse::fake()` now plug into `Anthropic::fake([...])` with `assertSent(Files::class, ...)` assertions, same as every other resource.
+
+**Documentation**
+
+- New [Files guide](https://mozex.dev/docs/anthropic-laravel/v1/usage/files) covering upload, list, retrieve, download, delete, and Messages integration with Laravel-idiomatic patterns: `Storage::readStream` for uploads, queued jobs that stream downloads to S3, Eloquent `anthropic_file_id` columns, and the `RateLimiter::for('anthropic-files', fn () => Limit::perMinute(90))` throttle for bulk uploads.
+
+**Boost skill**
+
+- `resources/boost/skills/anthropic-laravel/SKILL.md` picks up a new Files section covering the five methods, the Messages-side beta gotcha, block-to-file-type pairing, and the Eloquent + queued-job patterns. Triggers expanded to include `Anthropic::files()`, `FileResponse`, and file upload/reference work.
+
+#### Improved
+
+- Bump `mozex/anthropic-php` to `^1.7.0`. See the [PHP 1.7.0 release notes](https://github.com/mozex/anthropic-php/releases/tag/1.7.0) for the underlying implementation, including the auto-injection mechanism and the 40 Files-specific tests behind this release.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.6.0...1.7.0
+
 ## 1.6.0 - 2026-04-18
 
 ### What's Changed
