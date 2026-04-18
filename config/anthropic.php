@@ -24,4 +24,25 @@ return [
     */
 
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Beta Features
+    |--------------------------------------------------------------------------
+    |
+    | Anthropic beta features opt in via the `anthropic-beta` header. Values
+    | listed here are sent on every request made through the facade. They
+    | combine with any `betas` array you pass on a specific call, so request
+    | level betas still work on top of these defaults.
+    |
+    | Use ANTHROPIC_BETA as a comma separated list, or replace the default
+    | with a plain array of strings in this file.
+    |
+    | Example: ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
+    */
+
+    'beta' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('ANTHROPIC_BETA', ''))
+    ))),
 ];

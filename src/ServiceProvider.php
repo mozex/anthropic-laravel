@@ -29,10 +29,24 @@ final class ServiceProvider extends BaseServiceProvider implements DeferrablePro
                 throw ApiKeyIsMissing::create();
             }
 
-            return Anthropic::factory()
+            $factory = Anthropic::factory()
                 ->withApiKey($apiKey)
-                ->withHttpClient(new \GuzzleHttp\Client(['timeout' => config('anthropic.request_timeout', 30)]))
-                ->make();
+                ->withHttpClient(new \GuzzleHttp\Client(['timeout' => config('anthropic.request_timeout', 30)]));
+
+            $beta = config('anthropic.beta', []);
+
+            if (is_array($beta) && $beta !== []) {
+                $betaHeader = implode(',', array_filter(array_map(
+                    static fn (mixed $value): string => is_string($value) ? trim($value) : '',
+                    $beta,
+                )));
+
+                if ($betaHeader !== '') {
+                    $factory = $factory->withHttpHeader('anthropic-beta', $betaHeader);
+                }
+            }
+
+            return $factory->make();
         });
 
         $this->app->alias(ClientContract::class, 'anthropic');

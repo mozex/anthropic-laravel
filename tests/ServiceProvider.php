@@ -60,3 +60,69 @@ it('provides', function () {
         'anthropic',
     ]);
 });
+
+it('sets the anthropic-beta header when config.beta has values', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => 'test',
+            'beta' => ['files-api-2025-04-14', 'extended-cache-ttl-2025-04-11'],
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(clientHeaders($app->get(Client::class)))
+        ->toHaveKey('anthropic-beta', 'files-api-2025-04-14,extended-cache-ttl-2025-04-11');
+});
+
+it('does not set the anthropic-beta header when config.beta is empty or missing', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => 'test',
+            'beta' => [],
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(clientHeaders($app->get(Client::class)))->not->toHaveKey('anthropic-beta');
+});
+
+it('ignores non-string entries in config.beta', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => 'test',
+            'beta' => ['files-api-2025-04-14', 42, null, '', '  '],
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(clientHeaders($app->get(Client::class)))
+        ->toHaveKey('anthropic-beta', 'files-api-2025-04-14');
+});
+
+/**
+ * Extracts the headers value object from a resolved Client via reflection.
+ *
+ * @return array<string, string>
+ */
+function clientHeaders(Client $client): array
+{
+    $transporterProperty = new ReflectionProperty($client, 'transporter');
+    $transporter = $transporterProperty->getValue($client);
+
+    $headersProperty = new ReflectionProperty($transporter, 'headers');
+    $headers = $headersProperty->getValue($transporter);
+
+    /** @var array<string, string> $array */
+    $array = $headers->toArray();
+
+    return $array;
+}
