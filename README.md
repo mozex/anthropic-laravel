@@ -1,7 +1,7 @@
 # Anthropic Laravel
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
-[![GitHub Tests Workflow Status](https://img.shields.io/github/actions/workflow/status/mozex/anthropic-laravel/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/mozex/anthropic-laravel/actions/workflows/tests.yml)
+[![GitHub Checks Workflow Status](https://img.shields.io/github/actions/workflow/status/mozex/anthropic-laravel/checks.yml?branch=main&label=checks&style=flat-square)](https://github.com/mozex/anthropic-laravel/actions/workflows/checks.yml)
 [![Docs](https://img.shields.io/badge/docs-mozex.dev-10B981?style=flat-square)](https://mozex.dev/docs/anthropic-laravel/v1)
 [![License](https://img.shields.io/github/license/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
 [![Total Downloads](https://img.shields.io/packagist/dt/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
