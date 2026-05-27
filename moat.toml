@@ -4,3 +4,5 @@
 # protection all remain enforced.
 [checks]
 repositories_pull_requests_require_reviews = "off"
+# The changelog job needs `contents: write` to push its verified CHANGELOG.md commit.
+repositories_workflow_permissions_are_restricted = "off"
