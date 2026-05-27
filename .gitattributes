@@ -12,3 +12,4 @@ phpunit.xml.dist   export-ignore
 CHANGELOG.md       export-ignore
 CONTRIBUTING.md    export-ignore
 README.md          export-ignore
+moat.toml          export-ignore
