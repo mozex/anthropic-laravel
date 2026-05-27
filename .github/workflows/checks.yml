@@ -12,22 +12,20 @@ permissions:
 jobs:
   lint:
     name: Lint
-    permissions:
-      contents: write
-    uses: mozex/reusable-workflows/.github/workflows/code-styling.yml@ab63849bd7154796870541e8bc7519905b95b73b # main
+    uses: mozex/reusable-workflows/.github/workflows/code-styling.yml@c2b1a0f19759007a1703b936bd0ce68cac90533b # main
     with:
       php_version: '8.5'
       test_mode: true
 
   types:
     name: Types
-    uses: mozex/reusable-workflows/.github/workflows/code-analysis.yml@ab63849bd7154796870541e8bc7519905b95b73b # main
+    uses: mozex/reusable-workflows/.github/workflows/code-analysis.yml@c2b1a0f19759007a1703b936bd0ce68cac90533b # main
     with:
       php_version: '8.5'
 
   type-coverage:
     name: Type Coverage
-    uses: mozex/reusable-workflows/.github/workflows/type-coverage.yml@ab63849bd7154796870541e8bc7519905b95b73b # main
+    uses: mozex/reusable-workflows/.github/workflows/type-coverage.yml@c2b1a0f19759007a1703b936bd0ce68cac90533b # main
     with:
       php_version: '8.5'
       phpunit_config_file: 'phpunit.xml.dist'
