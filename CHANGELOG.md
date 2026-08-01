@@ -2,6 +2,52 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.8.0 - 2026-08-01
+
+### What's Changed
+
+#### Added
+
+**Server-side fallback for refused requests**
+
+- On Claude Fable 5 and Opus 5 you can pass `'fallbacks' => 'default'` with the `server-side-fallback-2026-07-01` beta so the API retries a refused request on another model instead of returning the refusal. The response DTOs from `anthropic-php` 1.8.0 parse the whole flow: the `fallback` content block, per-attempt `usage->iterations`, and `stop_details->recommended_model`.
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+use Illuminate\Support\Facades\Log;
+
+$response = Anthropic::messages()->create([
+    'model' => 'claude-fable-5',
+    'max_tokens' => 1024,
+    'fallbacks' => 'default',
+    'betas' => ['server-side-fallback-2026-07-01'],
+    'messages' => [['role' => 'user', 'content' => $prompt]],
+]);
+
+foreach ($response->usage->iterations ?? [] as $iteration) {
+    if ($iteration->type === 'fallback_message') {
+        Log::info('Served by fallback model', ['model' => $iteration->model]);
+    }
+}
+
+```
+#### Improved
+
+**Documentation**
+
+- The [Messages guide](https://mozex.dev/docs/anthropic-laravel/v1/usage/messages) covers the expanded refusal categories (`frontier_llm`, `reasoning_extraction`, `general_harms`) and the new fallback section with a logging pattern, so refusal metrics don't misreport which model answered.
+- The Server Tools guide mentions the latest `web_search_20260318` version and its `response_inclusion` parameter.
+
+**Boost skill**
+
+- The refusal section of `resources/boost/skills/anthropic-laravel/SKILL.md` picks up the expanded category list and a pointer to the fallback flow, so AI assistants working in your app suggest current values.
+
+**Dependency**
+
+- Bump `mozex/anthropic-php` to `^1.8.0`. Everything in that release flows through the facade automatically: `usage->outputTokensDetails` (thinking token breakdown), `usage->speed` (fast mode), `usage->iterations`, compaction content blocks and `context_management`, and cache diagnostics. See the [PHP 1.8.0 release notes](https://github.com/mozex/anthropic-php/releases/tag/1.8.0) for details and examples.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.7.0...1.8.0
+
 ## 1.7.0 - 2026-04-18
 
 ### What's Changed
@@ -32,6 +78,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 ```
 - Anthropic currently flags this endpoint as beta. The SDK auto-injects the required `anthropic-beta: files-api-2025-04-14` header on every `Anthropic::files()` call, so there's nothing to configure. When you reference a `file_id` inside a Messages call, pass `'betas' => ['files-api-2025-04-14']` on the Messages call as well; the Messages endpoint also needs the header when a file is referenced. If every Messages call in your app references uploaded files, put the beta globally via `config('anthropic.beta')` instead.
