@@ -58,7 +58,7 @@ $response->usage->serverToolUse?->webSearchRequests; // 1
 ]
 ```
 
-A newer version `web_search_20260209` adds dynamic filtering (Claude writes code to filter search results before they reach the context). It requires the code execution tool to be enabled alongside it.
+A newer version `web_search_20260209` adds dynamic filtering (Claude writes code to filter search results before they reach the context). It requires the code execution tool to be enabled alongside it. The latest, `web_search_20260318`, adds a `response_inclusion` parameter that drops consumed result blocks from the response.
 
 ## Code execution
 

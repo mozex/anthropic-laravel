@@ -216,7 +216,7 @@ $response = Anthropic::messages()->create([...]);
 if ($response->stop_reason === 'refusal') {
     Log::warning('Claude refused request', [
         'user_id' => auth()->id(),
-        'category' => $response->stop_details->category,    // 'cyber', 'bio', or null
+        'category' => $response->stop_details->category,    // 'cyber', 'bio', 'frontier_llm', 'reasoning_extraction', 'general_harms', or null
         'explanation' => $response->stop_details->explanation,
     ]);
 
@@ -225,6 +225,33 @@ if ($response->stop_reason === 'refusal') {
 ```
 
 `stop_details` is `null` on normal completions, so only touch it when `stop_reason === 'refusal'`. Treat `category` as the machine-readable signal; the `explanation` text isn't stable between calls.
+
+### Falling back to another model
+
+On Claude Fable 5 and Opus 5, the API can retry a refused request on another model instead of returning the refusal to you. It's in beta: pass `fallbacks` with the beta header, then log which model actually answered so your metrics don't lie about model usage:
+
+```php
+$response = Anthropic::messages()->create([
+    'model' => 'claude-fable-5',
+    'max_tokens' => 1024,
+    'fallbacks' => 'default',
+    'betas' => ['server-side-fallback-2026-07-01'],
+    'messages' => [
+        ['role' => 'user', 'content' => $prompt],
+    ],
+]);
+
+foreach ($response->usage->iterations ?? [] as $iteration) {
+    if ($iteration->type === 'fallback_message') {
+        Log::info('Claude request served by fallback model', [
+            'user_id' => auth()->id(),
+            'model' => $iteration->model,
+        ]);
+    }
+}
+```
+
+Each attempt is billed at its own model's rates, and `usage->iterations` is the per-attempt record. For the `fallback` content block, sticky routing, and echo rules on later turns, see the [refusal handling section in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/messages).
 
 ## The `pause_turn` stop reason
 

@@ -131,7 +131,7 @@ When safety classifiers intervene, `stop_reason` is `'refusal'` and `stop_detail
 if ($response->stop_reason === 'refusal') {
     Log::warning('Claude refused', [
         'user_id' => auth()->id(),
-        'category' => $response->stop_details->category,    // 'cyber', 'bio', or null
+        'category' => $response->stop_details->category,    // 'cyber', 'bio', 'frontier_llm', 'reasoning_extraction', 'general_harms', or null
         'explanation' => $response->stop_details->explanation,
     ]);
     return back()->with('error', 'Your request could not be processed.');
@@ -139,6 +139,8 @@ if ($response->stop_reason === 'refusal') {
 ```
 
 `stop_details` is `null` on normal completions, so guard before reading it. Treat `category` as the machine-readable signal; `explanation` text isn't stable between calls, so don't parse it.
+
+On Claude Fable 5 and Opus 5 you can pass `'fallbacks' => 'default'` with the `server-side-fallback-2026-07-01` beta so the API retries a refused request on another model. Check `usage->iterations` for a `fallback_message` entry to see which model actually served the turn; see the docs Messages page for the full flow.
 
 ### 5. Mid-stream errors arrive after HTTP 200
 
