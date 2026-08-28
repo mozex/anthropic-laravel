@@ -11,4 +11,4 @@ jobs:
     name: Changelog
     permissions:
       contents: write
-    uses: mozex/reusable-workflows/.github/workflows/changelog.yml@2b525367047b666e1fd22574e7916535089c3c2c # main
+    uses: mozex/reusable-workflows/.github/workflows/changelog.yml@2c29377e2b38ac9e913ca8308f84106986c9cc3c # main
