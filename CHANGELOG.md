@@ -2,6 +2,21 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.8.1 - 2026-09-13
+
+### What's Changed
+
+#### Fixed
+
+**Boost skill**
+
+- The `description` in `resources/boost/skills/anthropic-laravel/SKILL.md` is down from 1,226 to 814 characters, under the 1,024-character limit in the Agent Skills spec. Codex CLI before 0.142 skipped the whole skill because of the length, and newer Codex and VS Code cut the description off at 1,024. Every trigger term is still there. The Context7 pointer that left the description still lives in the skill body.
+- Run `php artisan boost:update` after updating so your agents pick up the new description.
+
+Reported by @kasparovabi in https://github.com/mozex/anthropic-laravel/issues/16
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.8.0...1.8.1
+
 ## 1.8.0 - 2026-08-01
 
 ### What's Changed
@@ -29,6 +44,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
         Log::info('Served by fallback model', ['model' => $iteration->model]);
     }
 }
+
 
 ```
 #### Improved
@@ -78,6 +94,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 ```
