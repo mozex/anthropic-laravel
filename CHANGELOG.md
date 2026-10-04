@@ -2,6 +2,14 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.8.2 - 2026-10-04
+
+### What's Changed
+
+* Improve package setup
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.8.1...1.8.2
+
 ## 1.8.1 - 2026-09-13
 
 ### What's Changed
@@ -44,6 +52,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
         Log::info('Served by fallback model', ['model' => $iteration->model]);
     }
 }
+
 
 
 ```
@@ -94,6 +103,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
