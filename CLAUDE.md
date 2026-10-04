@@ -34,7 +34,7 @@ Small package with 6 source files in `src/`:
 - **`Facades/Anthropic.php`** — Facade resolving `'anthropic'`. Has `fake(array $responses)` for testing (swaps root with `AnthropicFake`).
 - **`Testing/AnthropicFake.php`** — Thin subclass of `Anthropic\Testing\ClientFake`. Provides `assertSent()`, `assertNotSent()`, `assertNothingSent()`.
 - **`Exceptions/ApiKeyIsMissing.php`** — Thrown when `anthropic.api_key` config is missing or not a string.
-- **`Commands/InstallCommand.php`** — `php artisan anthropic:install`. Copies config, appends env vars to `.env`/`.env.example`. Uses Termwind for console output via `Support/View.php`.
+- **`Commands/InstallCommand.php`** — `php artisan anthropic:install`. Copies config, appends env vars to `.env`/`.env.example`, then asks for a GitHub star (default yes). Uses Termwind for console output via `Support/View.php`. A run nobody can answer (`--no-interaction`, or no terminal on stdin, as with CI and AI agents) skips the question, takes the default, and prints a note explaining the browser tab. `isInteractive()` treats unit tests as interactive, like Laravel's own prompt rule, so the tests are deterministic. The question uses `$this->confirm()`, not Laravel Prompts: the earlier `callSilent('vendor:publish')` reconfigures Prompts' global output to a `NullOutput`, which would make a Prompts question invisible. The browser opens through the `Process` facade (backgrounded on Linux, where `xdg-open` without a detected desktop runs the browser in the foreground), and any failure prints the URL instead.
 - **`Support/View.php`** — Termwind console view renderer using PHP templates from `resources/views/components/`.
 
 **Config** (`config/anthropic.php`): `anthropic.api_key` (env `ANTHROPIC_API_KEY`), `anthropic.request_timeout` (env `ANTHROPIC_REQUEST_TIMEOUT`, default `30`).
@@ -55,6 +55,8 @@ Small package with 6 source files in `src/`:
 Tests use **Pest** syntax with `expect()` assertions.
 
 Architecture tests in `tests/Arch.php` enforce namespace dependency boundaries — each namespace declares which imports are allowed.
+
+`tests/Commands/InstallCommand.php` runs the install command through Orchestra Testbench (`tests/TestCase.php` registers the provider); it's the only file bound to that TestCase. It fakes `Process`, so no test opens a real browser, and restores the testbench skeleton's `.env.example` afterwards.
 
 Facade fake pattern:
 ```php
