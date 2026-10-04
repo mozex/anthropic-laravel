@@ -63,10 +63,6 @@ final class View
 
         include sprintf('%s/../../resources/views/%s.php', __DIR__, $path);
 
-        $contents = ob_get_contents();
-
-        ob_clean();
-
-        return (string) $contents;
+        return (string) ob_get_clean();
     }
 }
