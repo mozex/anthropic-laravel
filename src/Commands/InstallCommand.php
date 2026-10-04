@@ -5,6 +5,8 @@ namespace Anthropic\Laravel\Commands;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Laravel\Support\View;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Process;
+use Throwable;
 
 class InstallCommand extends Command
 {
@@ -39,8 +41,6 @@ class InstallCommand extends Command
 
         View::render('components.new-line');
 
-        $wantsToSupport = $this->askToStarRepository();
-
         $this->showLinks();
 
         View::render('components.badge', [
@@ -48,9 +48,7 @@ class InstallCommand extends Command
             'content' => 'Open your .env and add your Anthropic API key.',
         ]);
 
-        if ($wantsToSupport) {
-            $this->openRepositoryInBrowser();
-        }
+        $this->askToStar();
     }
 
     private function copyConfig(): void
@@ -108,25 +106,70 @@ class InstallCommand extends Command
         ]);
     }
 
-    private function askToStarRepository(): bool
+    /**
+     * A person gets the question, defaulting to yes. A run nobody can answer
+     * (--no-interaction, or no terminal on stdin, as with CI and AI agents)
+     * takes that default without asking, so it gets a note explaining the
+     * browser tab instead.
+     */
+    private function askToStar(): void
+    {
+        if (! $this->isInteractive()) {
+            $this->line(' If Anthropic for Laravel saves you time, please consider starring it on GitHub: '.self::LINKS['Repository']);
+
+            $this->openInBrowser();
+
+            return;
+        }
+
+        if (! $this->confirm(' <options=bold>Would you like to show some love by starring Anthropic for Laravel on GitHub?</>', true)) {
+            return;
+        }
+
+        if ($this->openInBrowser()) {
+            return;
+        }
+
+        $this->line(" You'll find Anthropic for Laravel at ".self::LINKS['Repository']);
+    }
+
+    /**
+     * Laravel's own rule for prompts (stdin must be a terminal, except under
+     * unit tests, where the console output is faked), except that
+     * --no-interaction always wins, which keeps that path testable.
+     */
+    private function isInteractive(): bool
     {
         if (! $this->input->isInteractive()) {
             return false;
         }
 
-        return $this->confirm(' <options=bold>Wanna show Anthropic for Laravel some love by starring it on GitHub?</>', false);
+        if ($this->laravel->runningUnitTests()) {
+            return true;
+        }
+
+        return defined('STDIN') && stream_isatty(STDIN);
     }
 
-    private function openRepositoryInBrowser(): void
+    /**
+     * Best effort: any failure returns false. On Linux the opener runs in the
+     * background, because xdg-open without a detected desktop runs the browser
+     * in the foreground and would hold the command until the browser closes.
+     */
+    private function openInBrowser(): bool
     {
-        if (PHP_OS_FAMILY == 'Darwin') {
-            exec('open https://github.com/mozex/anthropic-laravel');
-        }
-        if (PHP_OS_FAMILY == 'Windows') {
-            exec('start https://github.com/mozex/anthropic-laravel');
-        }
-        if (PHP_OS_FAMILY == 'Linux') {
-            exec('xdg-open https://github.com/mozex/anthropic-laravel');
+        $url = self::LINKS['Repository'];
+
+        $command = match (PHP_OS_FAMILY) {
+            'Darwin' => ['open', $url],
+            'Windows' => ['cmd', '/c', 'start', '', $url],
+            default => ['sh', '-c', 'command -v xdg-open > /dev/null && (xdg-open "$1" > /dev/null 2>&1 &)', 'sh', $url],
+        };
+
+        try {
+            return Process::run($command)->successful();
+        } catch (Throwable) {
+            return false;
         }
     }
 
