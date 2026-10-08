@@ -1,4 +1,4 @@
-![Anthropic Laravel](https://raw.githubusercontent.com/mozex/anthropic-laravel/main/art/banner.png)
+[![Anthropic Laravel](https://raw.githubusercontent.com/mozex/anthropic-laravel/main/art/banner.png)](https://mozex.dev/docs/anthropic-laravel)
 
 # Anthropic Laravel
 
