@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="anthropic-laravel-tile" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18181b"/>
+      <stop offset="1" stop-color="#09090b"/>
+    </linearGradient>
+    <radialGradient id="anthropic-laravel-glow" cx="256" cy="232" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10b981" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#10b981" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="anthropic-laravel-edge" x1="96" y1="0" x2="416" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#34d399" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="anthropic-laravel-glyph" x1="0" y1="96" x2="0" y2="416" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#anthropic-laravel-tile)"/>
+  <rect width="512" height="512" rx="96" fill="url(#anthropic-laravel-glow)"/>
+  <rect x="2" y="2" width="508" height="508" rx="94" stroke="#27272a" stroke-width="4"/>
+  <path d="M96 3H416" stroke="url(#anthropic-laravel-edge)" stroke-width="2"/>
+  <rect x="112" y="100" width="288" height="208" rx="64" fill="url(#anthropic-laravel-glyph)"/>
+  <path d="M256 300V336" stroke="url(#anthropic-laravel-glyph)" stroke-width="28"/>
+  <rect x="212" y="330" width="88" height="56" rx="16" fill="url(#anthropic-laravel-glyph)"/>
+  <path d="M236 386V416M276 386V416" stroke="#059669" stroke-width="18" stroke-linecap="round"/>
+  <g transform="translate(0 -20)">
+  <path d="M204 180L160 224L204 268M308 180L352 224L308 268" stroke="#0c0c0e" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 178C263.36 216.64 263.36 216.64 302 224C263.36 231.36 263.36 231.36 256 270C248.64 231.36 248.64 231.36 210 224C248.64 216.64 248.64 216.64 256 178Z" fill="#0c0c0e"/>
+  </g>
+</svg>
