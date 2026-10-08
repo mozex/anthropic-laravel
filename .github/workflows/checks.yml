@@ -12,20 +12,20 @@ permissions:
 jobs:
   lint:
     name: Lint
-    uses: mozex/reusable-workflows/.github/workflows/code-styling.yml@2c29377e2b38ac9e913ca8308f84106986c9cc3c # main
+    uses: mozex/reusable-workflows/.github/workflows/code-styling.yml@010dfed3742dae35f0c1b19dc20944426f2d8d6d # main
     with:
       php_version: '8.5'
       test_mode: true
 
   types:
     name: Types
-    uses: mozex/reusable-workflows/.github/workflows/code-analysis.yml@2c29377e2b38ac9e913ca8308f84106986c9cc3c # main
+    uses: mozex/reusable-workflows/.github/workflows/code-analysis.yml@010dfed3742dae35f0c1b19dc20944426f2d8d6d # main
     with:
       php_version: '8.5'
 
   type-coverage:
     name: Type Coverage
-    uses: mozex/reusable-workflows/.github/workflows/type-coverage.yml@2c29377e2b38ac9e913ca8308f84106986c9cc3c # main
+    uses: mozex/reusable-workflows/.github/workflows/type-coverage.yml@010dfed3742dae35f0c1b19dc20944426f2d8d6d # main
     with:
       php_version: '8.5'
       phpunit_config_file: 'phpunit.xml.dist'
@@ -48,7 +48,7 @@ jobs:
             php: 8.2
     steps:
       - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
