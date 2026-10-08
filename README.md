@@ -1,3 +1,5 @@
+![Anthropic Laravel](https://raw.githubusercontent.com/mozex/anthropic-laravel/main/art/banner.png)
+
 # Anthropic Laravel
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
