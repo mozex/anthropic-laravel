@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`mozex/anthropic-laravel` — A Laravel integration package wrapping `mozex/anthropic-php` (framework-agnostic Anthropic API client). Exposes the client via a service provider, facade, and Artisan install command. Namespace: `Anthropic\Laravel\`. Requires PHP 8.2+, Laravel 11 or 12.
+`mozex/anthropic-laravel` — A Laravel integration package wrapping `mozex/anthropic-php` (framework-agnostic Anthropic API client). Exposes the client via a service provider, facade, and Artisan install command. Namespace: `Anthropic\Laravel\`. Requires PHP 8.2+, Laravel 12 or 13.
 
 ## Commands
 
@@ -67,4 +67,4 @@ Anthropic::assertSent(Messages::class, fn (string $method, array $parameters) =>
 
 ## CI
 
-Tests run across: PHP 8.2/8.3/8.4, Laravel 11/12, Pest 3/4, prefer-lowest/prefer-stable.
+Tests run across: PHP 8.2/8.3/8.4, Laravel 12/13, Pest 3/4, prefer-lowest/prefer-stable.
