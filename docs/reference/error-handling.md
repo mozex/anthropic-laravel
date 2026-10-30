@@ -46,12 +46,12 @@ HTTP 429 responses throw `RateLimitException`, a subclass of `ErrorException`. C
 ```php
 use Anthropic\Exceptions\RateLimitException;
 use Anthropic\Exceptions\ErrorException;
+use Anthropic\Responses\Meta\MetaInformation;
 
 try {
     $response = Anthropic::messages()->create([...]);
 } catch (RateLimitException $e) {
-    $retryAfter = $e->response->getHeaderLine('Retry-After');
-    sleep((int) $retryAfter);
+    sleep(MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
     // Retry
 } catch (ErrorException $e) {
     // Other API errors
@@ -63,6 +63,8 @@ try {
 Queue jobs are a natural fit for retry logic. Combine Laravel's `tries` and `backoff` with rate limit handling:
 
 ```php
+use Anthropic\Responses\Meta\MetaInformation;
+
 class AskClaudeJob implements ShouldQueue
 {
     public $tries = 5;
@@ -73,7 +75,7 @@ class AskClaudeJob implements ShouldQueue
         try {
             $response = Anthropic::messages()->create([...]);
         } catch (RateLimitException $e) {
-            $this->release((int) $e->response->getHeaderLine('Retry-After') ?: 60);
+            $this->release(MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
             return;
         } catch (ErrorException $e) {
             if ($e->getErrorType() === 'overloaded_error') {
@@ -88,6 +90,8 @@ class AskClaudeJob implements ShouldQueue
     }
 }
 ```
+
+`retryAfter` is the `Retry-After` header in seconds, `null` when the 429 has none (an organization past its tier's monthly spend cap gets none, since waiting won't help).
 
 Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Check the error type, not the status code: an overload that arrives in the middle of a stream comes with status 200.
 

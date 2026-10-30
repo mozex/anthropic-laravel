@@ -1,6 +1,6 @@
 ---
 name: anthropic-laravel
-description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), extended thinking, web search, code execution, document citations, bulk processing with batches, uploading and referencing files by `file_id`, token counting before sending, or testing code that calls the API.
+description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), computer and browser toolsets, extended thinking, web search, code execution, the MCP connector, document citations, bulk processing with batches, uploading and referencing files by `file_id`, token counting before sending, or testing code that calls the API.
 ---
 
 # Anthropic Laravel
@@ -33,7 +33,7 @@ composer require mozex/anthropic-laravel
 php artisan anthropic:install
 ```
 
-The install command publishes `config/anthropic.php` and appends `ANTHROPIC_API_KEY=` to `.env` and `.env.example`. Three keys, all env-backed:
+The install command publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to `.env` and `.env.example`, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out. Five keys, all env-backed:
 
 ```php
 return [
@@ -43,8 +43,12 @@ return [
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
     ))),
+    'api_version' => env('ANTHROPIC_API_VERSION'),
+    'base_url' => env('ANTHROPIC_BASE_URL'),
 ];
 ```
+
+`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. A config file published by an older release lacks both keys; re-running `anthropic:install` names what's missing.
 
 `ANTHROPIC_BETA` takes a comma-separated list of beta names (`ANTHROPIC_BETA=compact-2026-01-12`). They go out in the `anthropic-beta` header on every request, merged with any `betas` array you pass on a single call.
 
@@ -63,10 +67,10 @@ Anthropic::messages();     // Messages resource
 Anthropic::batches();      // Message Batches
 Anthropic::models();       // Models
 Anthropic::files();        // Files (upload, list, download, delete)
-Anthropic::completions();  // Legacy Text Completions
+Anthropic::completions();  // Deprecated Text Completions: the API rejects it on current models
 ```
 
-Don't instantiate `Anthropic\Client` directly in Laravel code; the container binding already does that. If you need a custom HTTP client, headers, or a non-standard base URI, see the factory section at the end.
+Don't instantiate `Anthropic\Client` directly in Laravel code; the container binding already does that. If you need a custom HTTP client or headers, see the factory section at the end.
 
 ## Five things that surprise people
 
@@ -87,26 +91,36 @@ DTO casing matches the wire format from the API, so different response shapes us
 
 When in doubt, `dump($response)` or consult `/mozex/anthropic-php` via Context7 or the docs site. Guessing usually produces `PropertyNotFound` errors at runtime.
 
-### 2. The `caller` filter on tool dispatchers
+### 2. Tool dispatchers key on `toolset_name` and `name`
 
-Every `tool_use` block carries a `caller` object. When you mix custom tools with server tools (notably code execution), Claude can call your tools *indirectly* from inside the sandbox. Those calls have already been handled on Anthropic's side. Running them again in your dispatcher duplicates the work and can corrupt state.
-
-Always filter by `$block->caller?->type === 'direct'`:
+With the computer or browser toolset (`['type' => 'computer_toolset_20260801']`, `['type' => 'browser_toolset_20260801']`), their member tools (`screenshot`, `left_click`, `navigate` ...) arrive as ordinary `tool_use` blocks with `toolset_name` set to `'computer'` or `'browser'`; a custom tool's call has `toolset_name` `null`. A custom tool may share a member's name, so dispatch on the pair, never on `name` alone, and echo `toolset_name` on every member's result (only on those; the API rejects a member result without it):
 
 ```php
 foreach ($response->content as $block) {
-    if ($block->type === 'tool_use' && $block->caller?->type === 'direct') {
-        $service = app($toolRegistry[$block->name]);
+    if ($block->type !== 'tool_use') {
+        continue;
+    }
+
+    if ($block->toolset_name !== null) {
         $results[] = [
             'type' => 'tool_result',
             'tool_use_id' => $block->id,
-            'content' => json_encode($service->handle($block->input)),
+            'toolset_name' => $block->toolset_name,
+            'content' => app($toolsets[$block->toolset_name])->run($block->name, $block->input),
         ];
+
+        continue;
     }
+
+    $results[] = [
+        'type' => 'tool_result',
+        'tool_use_id' => $block->id,
+        'content' => json_encode(app($toolRegistry[$block->name])->handle($block->input)),
+    ];
 }
 ```
 
-Indirect `caller->type` is a versioned string like `'code_execution_20250825'` or `'code_execution_20260120'`. Skip those blocks; they're informational.
+Don't skip a `tool_use` whose `$block->caller->type` is `'code_execution_20260120'`. That's programmatic tool calling: code Claude runs in the sandbox called your tool and is paused waiting for the result (it times out after about four minutes). Run it like a direct call. The answering `user` message must hold only `tool_result` blocks (string or `text` content, no text after them), and the request must pass the paused response's `container` id and the same `tools`.
 
 ### 3. `pause_turn` is not an error
 
@@ -115,7 +129,7 @@ Long-running turns can return `stop_reason: 'pause_turn'` instead of `'end_turn'
 ```php
 do {
     $response = Anthropic::messages()->create([
-        'model' => 'claude-sonnet-4-6',
+        'model' => 'claude-sonnet-5-5',
         'max_tokens' => 8192,
         'messages' => $messages,
     ]);
@@ -144,7 +158,9 @@ if ($response->stop_reason === 'refusal') {
 }
 ```
 
-`stop_details` is `null` on normal completions, so guard before reading it. Treat `category` as the machine-readable signal; `explanation` text isn't stable between calls, so don't parse it.
+`stop_details` is `null` on normal completions, so guard before reading it. Treat `category` as the machine-readable signal; `explanation` text isn't stable between calls, so don't parse it. Re-sending the same conversation usually gets another refusal: drop or rephrase the turn that caused it first.
+
+When streaming, the refusal arrives on the `message_delta` event, possibly after text has already streamed: check `$event->delta->stop_reason === 'refusal'`, read `$event->delta->stop_details?->category`, and discard the partial text (clear it in the UI too).
 
 On Claude Fable 5 and Opus 5 you can pass `'fallbacks' => 'default'` with the `server-side-fallback-2026-07-01` beta so the API retries a refused request on another model. Check `usage->iterations` for a `fallback_message` entry to see which model actually served the turn; see the docs Messages page for the full flow.
 
@@ -166,7 +182,7 @@ try {
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello, world'],
@@ -175,11 +191,15 @@ $response = Anthropic::messages()->create([
 
 $response->id;
 $response->stop_reason;
-$response->content[0]->text;
+collect($response->content)->firstWhere('type', 'text')?->text;
 $response->usage->inputTokens;
 ```
 
-Messages alternate `user` and `assistant`, starting with `user`. `system` is a *separate top-level string*, not a message with `role: system`.
+Messages alternate `user` and `assistant`, starting with `user`. `system` is normally a *separate top-level string*. Newer models (Claude 5 except Sonnet 5, and Opus 4.8) also accept a `['role' => 'system', 'content' => '...']` message partway through `messages`, never first and never between a `tool_use` and its `tool_result`.
+
+Every Claude 5 model thinks by default, so a reply can start with a `thinking` block: read the answer with `collect($response->content)->firstWhere('type', 'text')?->text` rather than `content[0]`.
+
+Sampling parameters: Claude 5 models, Opus 4.8 and Opus 4.7 return a 400 for any non-default `temperature`, `top_p` or `top_k`.
 
 ### Multi-turn
 
@@ -218,7 +238,11 @@ Pass an opaque identifier (UUID, hash) via `metadata.user_id`. It surfaces in th
 
 ### Long requests belong in queues
 
-Anything with extended thinking, code execution, or large context pushes past typical HTTP timeouts. Dispatch to a queue and raise both `ANTHROPIC_REQUEST_TIMEOUT` and the job's `$timeout`.
+Anything with extended thinking, code execution, or large context pushes past typical HTTP timeouts. Dispatch to a queue and raise both `ANTHROPIC_REQUEST_TIMEOUT` and the job's `$timeout`, then make sure the queue connection's `retry_after` in `config/queue.php` is larger than the job's `$timeout`. With a smaller `retry_after`, the worker releases the job to another process while the first is still waiting on Claude: the job runs twice and the call is paid twice.
+
+### Compaction
+
+On-demand compaction (beta `compact-2026-09-04`, `'compaction' => ['type' => 'summarize']`) returns one signed `compaction` block with `stop_reason: 'compaction'`; any other stop reason means no summary, so keep the history. On every later request, with the same beta header, send the block exactly as `toArray()` returns it (`signature` included, no extra keys), first in `messages`, and drop the turns it summarized. Threshold compaction (`compact-2026-01-12`, `'context_management' => ['edits' => [['type' => 'compact_20260112']]]`) also expects its `compaction` block back unchanged.
 
 ## Streaming
 
@@ -228,7 +252,7 @@ Anything with extended thinking, code execution, or large context pushes past ty
 - `content_block_start`: `$event->index`, `$event->content_block_start->type`
 - `content_block_delta`: `$event->delta->type` is `text_delta`, `input_json_delta`, `thinking_delta`, `signature_delta`, or `citations_delta`
 - `content_block_stop`: `$event->index`
-- `message_delta`: final `stop_reason` and usage
+- `message_delta`: final `stop_reason` and usage; `$event->delta->stop_details` on a refusal, `$event->delta->container` after code execution
 
 ```php
 foreach ($stream as $event) {
@@ -237,6 +261,8 @@ foreach ($stream as $event) {
     }
 }
 ```
+
+Some blocks arrive whole in `content_block_start` with no deltas: an on-demand `compaction` block (its `content` is a string there, with `signature`), `fallback` and `advisor_tool_result`.
 
 ### To the browser
 
@@ -297,18 +323,22 @@ $response->stop_reason; // 'tool_use'
 
 Send results back as a new `user` turn containing `tool_result` blocks. `tool_use_id` must match the `id` from the call. Set `'is_error' => true` on failures.
 
-`tool_choice` variants: `['type' => 'auto']` (default), `['type' => 'any']`, `['type' => 'tool', 'name' => '...']`, `['type' => 'none']`. Only `auto` and `none` work alongside `thinking`.
+`tool_choice` variants: `['type' => 'auto']` (default), `['type' => 'any']`, `['type' => 'tool', 'name' => '...']`, `['type' => 'none']`. Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 return a 400 for `any` and `tool`, and so does budget-based thinking; use `auto` with `'strict' => true` there.
 
-See pitfall #2 above for the critical `caller->type === 'direct'` filter.
+A tool call with no parameters has `input` as an `ArrayObject` in `toArray()`, which encodes as `{}`; the API rejects a replayed `"input": []`. So send `$response->toArray()['content']` back as is.
+
+See pitfall #2 above for dispatching on `toolset_name` and answering programmatic calls.
 
 ## Extended thinking
 
 Two modes:
 
-- **Adaptive** (Opus 4.6, Sonnet 4.6): `'thinking' => ['type' => 'adaptive']`. Use `'output_config' => ['effort' => 'low'|'medium'|'high'|'max']` to guide depth. `max` is Opus 4.6 / Sonnet 4.6 only.
-- **Budget-based** (older models): `'thinking' => ['type' => 'enabled', 'budget_tokens' => 10000]`. Deprecated on 4.6.
+- **Adaptive**: `'thinking' => ['type' => 'adaptive']`, the default on every Claude 5 model and opt-in on Opus 4.8, 4.7, 4.6 and Sonnet 4.6. Use `'output_config' => ['effort' => 'low'|'medium'|'high'|'xhigh'|'max']` to guide depth; `$model->capabilities?->effort` says which levels a model takes.
+- **Budget-based**: `'thinking' => ['type' => 'enabled', 'budget_tokens' => 10000]`, for Opus 4.5, Sonnet 4.5 and Haiku 4.5. Deprecated on Opus 4.6 and Sonnet 4.6; Claude 4.7 and later return a 400.
 
-Response content may include `thinking` (with `signature`), `redacted_thinking` (opaque `data`), and `text` blocks. With `'display' => 'omitted'`, the `thinking` field is empty but `signature` is still present, which is faster and preserves multi-turn continuity.
+Turning thinking off: Fable 5.1, Fable 5, Mythos and Opus 5.5 reject `'type' => 'disabled'`; Sonnet 5.5 takes `'type' => 'between_tools'` instead (effort `high` or below).
+
+Response content may include `thinking` (with `signature`), `redacted_thinking` (opaque `data`), and `text` blocks. `display` defaults to `'omitted'` on Claude 5 models, Opus 4.8 and Opus 4.7: the `thinking` field is empty but `signature` is still present. Pass `'display' => 'summarized'` to get the reasoning text.
 
 Preserve `signature` verbatim. The server uses it to verify thinking integrity on follow-up turns. When doing multi-turn with thinking, pass the full content array (including thinking blocks) back as the assistant message: `array_map(fn ($b) => $b->toArray(), $response->content)`.
 
@@ -329,6 +359,12 @@ These run on Anthropic infrastructure; add to `tools` and results come back in t
 **Server tool errors still return HTTP 200**. The error is inside the result block's `content`: `$block->content['type']` ends in `_error`, `$block->content['error_code']` gives the reason.
 
 Usage counts: `$response->usage->serverToolUse?->webSearchRequests` / `webFetchRequests` / `codeExecutionRequests` / `toolSearchRequests`.
+
+**MCP connector** (beta, `mcp-client-2025-11-20`): `'mcp_servers' => [['type' => 'url', 'url' => 'https://...', 'name' => 'crm', 'authorization_token' => $token]]` plus `['type' => 'mcp_toolset', 'mcp_server_name' => 'crm']` in `tools`. Results come back as `mcp_tool_use` (`server_name`) and `mcp_tool_result` (`is_error`) blocks; your code doesn't run them. Under `mcp-client-2026-09-15` a response can start with an `mcp_tool_listing` block, so don't assume `content[0]` is text.
+
+**Advisor tool** (beta, `advisor-tool-2026-03-01`): `['type' => 'advisor_20260301', 'name' => 'advisor', 'model' => 'claude-opus-5-5']`. Its `advisor_tool_result` blocks (usually encrypted) go back unchanged on later turns, with the beta header.
+
+**Programmatic tool calling**: mark custom tools with `'allowed_callers' => ['code_execution_20260120']`; see pitfall #2 for answering those calls.
 
 For the full list of result block types (`web_search_tool_result`, `bash_code_execution_tool_result`, `text_editor_code_execution_tool_result`, etc.) and the tool version history, fetch `/mozex/anthropic-php` via Context7 or the docs site.
 
@@ -357,17 +393,19 @@ if ($count->inputTokens > 180000) { $messages = array_slice($messages, 4); }
 $response = Anthropic::models()->list();
 
 foreach ($response->data as $model) {
-    $model->id;              // 'claude-sonnet-4-6'
+    $model->id;              // 'claude-sonnet-5-5'
     $model->displayName;
     $model->maxInputTokens;  // context window
     $model->maxTokens;       // max output
-    $model->capabilities->imageInput->supported;
-    $model->capabilities->thinking->types->adaptive->supported;
-    $model->capabilities->effort->max->supported;
+    $model->capabilities?->imageInput->supported;    // capabilities can be null
+    $model->capabilities?->thinking->types->adaptive->supported;
+    $model->capabilities?->effort->max->supported;
 }
 ```
 
-Pagination: `limit` (default 20, max 1000), `after_id`, `before_id`. Each list item is a full `RetrieveResponse`.
+Pagination: `limit` (default 20, max 1000), `after_id`, `before_id`. Each list item is a full `RetrieveResponse`. `maxInputTokens`, `maxTokens`, `capabilities`, `firstId` and `lastId` can be `null`.
+
+Lifecycle: `$model->lifecycle` (`'active'`, `'deprecated'`, `'retired'`), `$model->line` (`'sonnet'` ...), `$model->deprecatedAt`, `$model->retiresAt`. A scheduled check that logs a warning when a model the app uses is `deprecated` or `retired` catches retirements early (`lifecycle` is `null` on fakes and when the API doesn't send it).
 
 Cache the list so you're not hitting the API per request:
 
@@ -404,7 +442,11 @@ foreach (Anthropic::batches()->results($id) as $individual) {
         // ...
     }
     if ($individual->result->type === 'errored') {
-        Log::error('Batch request failed', ['custom_id' => $individual->customId]);
+        Log::error('Batch request failed', [
+            'custom_id' => $individual->customId,
+            'type' => $individual->result->error->type,
+            'request_id' => $individual->result->error->requestId, // can be null
+        ]);
     }
 }
 ```
@@ -427,7 +469,7 @@ Anthropic::files()->delete($fileId);
 
 ```php
 Anthropic::messages()->create([
-    'model' => 'claude-opus-4-6',
+    'model' => 'claude-opus-5-5',
     'max_tokens' => 1024,
     'betas' => ['files-api-2025-04-14'],
     'messages' => [[
@@ -443,6 +485,17 @@ Anthropic::messages()->create([
 Block pairing: PDFs and plain text go into `document` blocks; images (`image/jpeg|png|gif|webp`) go into `image` blocks; code execution inputs (CSV, XLSX, JSON, etc.) go into `container_upload` blocks.
 
 User-uploaded files are NOT downloadable (`downloadable: false`). `download()` only works on files produced by Skills or code execution; calling it on a user upload throws `ErrorException` with type `invalid_request_error`.
+
+Uploading a request's file: PHP's temp file lacks the original extension (`phpA1B2.tmp`), so name the stream after the original file (sanitize the browser-supplied name), or the API stores the temp name and misses the type:
+
+```php
+$upload = $request->file('pdf');
+
+Anthropic::files()->upload(['file' => \GuzzleHttp\Psr7\Utils::streamFor(
+    fopen($upload->getRealPath(), 'r'),
+    ['metadata' => ['uri' => $upload->getClientOriginalName()]],
+)]);
+```
 
 Typical Laravel pattern: store `anthropic_file_id` on an Eloquent model. When done with the file, call `Anthropic::files()->delete($id)` and null the column. For large downloads, queue a job that streams the bytes to S3.
 
@@ -468,7 +521,7 @@ Catch the specific subclass first, since `RateLimitException extends ErrorExcept
 try {
     Anthropic::messages()->create([...]);
 } catch (RateLimitException $e) {
-    sleep((int) $e->response->getHeaderLine('Retry-After'));
+    sleep(\Anthropic\Responses\Meta\MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
 } catch (ErrorException $e) {
     // other API errors
 } catch (TransporterException $e) {
@@ -489,7 +542,8 @@ class AskClaudeJob implements ShouldQueue {
         try {
             Anthropic::messages()->create([...]);
         } catch (RateLimitException $e) {
-            $this->release((int) $e->response->getHeaderLine('Retry-After') ?: 60);
+            // retryAfter is null on the spend-cap 429, which carries no Retry-After
+            $this->release(\Anthropic\Responses\Meta\MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
             return;
         } catch (ErrorException $e) {
             if ($e->getErrorType() === 'overloaded_error') { $this->release(30); return; }
@@ -528,6 +582,11 @@ $meta->inputTokenLimit->...;
 $meta->outputTokenLimit->...;
 $meta->priorityInputTokenLimit?->...;   // null unless on Priority Tier
 $meta->priorityOutputTokenLimit?->...;
+$meta->fastInputTokenLimit?->...;       // null unless the request used fast mode
+$meta->fastOutputTokenLimit?->...;
+$meta->organizationId;
+$meta->workspaceId;
+$meta->retryAfter;                      // seconds; sent with 429s, so read it from the exception's response
 ```
 
 Throttle before you hit 429 by stashing a cache flag when remaining drops low:
@@ -556,11 +615,11 @@ Anthropic::fake([
 // run code...
 
 Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
-    return $method === 'create' && $parameters['model'] === 'claude-sonnet-4-6';
+    return $method === 'create' && $parameters['model'] === 'claude-sonnet-5-5';
 });
 ```
 
-Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass `ErrorException` instances as fakes to test error branches. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
+Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass `ErrorException` instances as fakes to test error branches, built with a PSR-7 response (`new ErrorException([...], new \GuzzleHttp\Psr7\Response(529))`; an int status is deprecated). Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
 
 Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertNotSent`, `assertNothingSent`. Also resource-level: `Anthropic::messages()->assertSent(...)`.
 
@@ -572,12 +631,13 @@ For the full list of fake response classes (`Messages\CountTokensResponse`, `Bat
 
 ## Direct SDK factory (rare)
 
-Only when you need a custom HTTP client, base URI, headers, or stream handler:
+Only when you need a custom HTTP client, headers, or stream handler (the API version and base URL have config keys):
 
 ```php
-$client = Anthropic::factory()
+$client = \Anthropic::factory() // the PHP client's class, not the facade
     ->withApiKey(config('anthropic.api_key'))
-    ->withBaseUri('proxy.example.com/v1')
+    ->withApiVersion('2026-10-21')
+    ->withBaseUri('proxy.example.com/v1') // the full API root, /v1 included
     ->withHttpClient(new \GuzzleHttp\Client(['timeout' => 120]))
     ->withHttpHeader('X-Custom', 'value')
     ->withQueryParam('region', 'eu')
@@ -585,4 +645,4 @@ $client = Anthropic::factory()
     ->make();
 ```
 
-To use this as the app-wide client, rebind `Anthropic\Contracts\ClientContract` in a service provider.
+To use this as the app-wide client, wrap it in `$this->app->extend(\Anthropic\Contracts\ClientContract::class, fn () => \Anthropic::factory()->...->make())` in a service provider's `register()`. Don't use `singleton()` or `instance()`: the package's provider is deferred and registers its own binding over them when it loads; an extender survives, and `Anthropic::fake()` still wins in tests.

@@ -13,19 +13,19 @@ use Anthropic\Laravel\Facades\Anthropic;
 $response = Anthropic::models()->list();
 
 foreach ($response->data as $model) {
-    $model->id;             // 'claude-sonnet-4-6'
-    $model->displayName;    // 'Claude Sonnet 4.6'
-    $model->createdAt;      // '2025-05-14T00:00:00Z'
-    $model->maxInputTokens; // 200000
-    $model->maxTokens;      // 64000
+    $model->id;             // 'claude-sonnet-5-5'
+    $model->displayName;    // 'Claude Sonnet 5.5'
+    $model->createdAt;      // '2026-09-28T00:00:00Z'
+    $model->maxInputTokens; // 1000000
+    $model->maxTokens;      // 128000
 }
 ```
 
 Response includes pagination metadata:
 
 ```php
-$response->firstId; // 'claude-sonnet-4-6'
-$response->lastId;  // 'claude-haiku-4-5'
+$response->firstId; // 'claude-haiku-5-5'
+$response->lastId;  // 'claude-haiku-4-5-20251001'
 $response->hasMore; // true
 ```
 
@@ -66,35 +66,67 @@ $models = Cache::remember('anthropic.models', now()->addHour(), function () {
 ## Retrieving a single model
 
 ```php
-$response = Anthropic::models()->retrieve('claude-sonnet-4-6');
+$response = Anthropic::models()->retrieve('claude-sonnet-5-5');
 
-$response->id;             // 'claude-sonnet-4-6'
-$response->displayName;    // 'Claude Sonnet 4.6'
-$response->createdAt;      // '2025-05-14T00:00:00Z'
-$response->maxInputTokens; // 200000
-$response->maxTokens;      // 64000
+$response->id;             // 'claude-sonnet-5-5'
+$response->displayName;    // 'Claude Sonnet 5.5'
+$response->createdAt;      // '2026-09-28T00:00:00Z'
+$response->maxInputTokens; // 1000000
+$response->maxTokens;      // 128000
 ```
+
+`maxInputTokens`, `maxTokens` and `capabilities` can be `null`, so give them a fallback.
+
+## Catching retirements early
+
+Each model reports its `lifecycle` (`'active'`, `'deprecated'` or `'retired'`), its family `line` (`'sonnet'`, `'opus'` ...), and `deprecatedAt` and `retiresAt` dates. A scheduled check warns you before a model your app uses stops answering:
+
+```php
+// routes/console.php
+use Anthropic\Laravel\Facades\Anthropic;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::call(function () {
+    foreach (config('services.anthropic.models', ['claude-sonnet-5-5']) as $id) {
+        $model = Anthropic::models()->retrieve($id);
+
+        if (in_array($model->lifecycle, ['deprecated', 'retired'], true)) {
+            Log::warning('Claude model is being retired', [
+                'model' => $model->id,
+                'lifecycle' => $model->lifecycle,
+                'retires_at' => $model->retiresAt,
+            ]);
+        }
+    }
+})->daily();
+```
+
+A deprecated model whose `retiresAt` has already passed is overdue to retire, so treat it as gone.
 
 ## Capabilities
 
 Each model reports what it supports through a `capabilities` object. The common fields are typed:
 
 ```php
-$model = Anthropic::models()->retrieve('claude-sonnet-4-6');
+$model = Anthropic::models()->retrieve('claude-sonnet-5-5');
 
-$model->capabilities->batch->supported;
-$model->capabilities->citations->supported;
-$model->capabilities->codeExecution->supported;
-$model->capabilities->imageInput->supported;
-$model->capabilities->pdfInput->supported;
-$model->capabilities->structuredOutputs->supported;
-$model->capabilities->thinking->supported;
+$model->capabilities?->batch->supported;
+$model->capabilities?->citations->supported;
+$model->capabilities?->codeExecution->supported;
+$model->capabilities?->imageInput->supported;
+$model->capabilities?->pdfInput->supported;
+$model->capabilities?->structuredOutputs->supported;
+$model->capabilities?->thinking->supported;
+$model->capabilities?->thinking->types->betweenTools?->supported;
+$model->capabilities?->effort->xhigh?->supported;
+$model->capabilities?->serverTools?->webSearch->supported;
 ```
 
 Context management strategies are date-versioned and exposed as a map, so new versions Anthropic ships show up without a package update:
 
 ```php
-foreach ($model->capabilities->contextManagement->strategies as $name => $strategy) {
+foreach ($model->capabilities?->contextManagement->strategies ?? [] as $name => $strategy) {
     $name;                // 'clear_thinking_20251015'
     $strategy->supported; // true
 }
@@ -109,15 +141,15 @@ $model = Cache::remember('anthropic.pdf_model', now()->addDay(), function () {
     $models = Anthropic::models()->list()->data;
 
     foreach ($models as $model) {
-        if ($model->capabilities->pdfInput->supported) {
+        if ($model->capabilities?->pdfInput->supported) {
             return $model->id;
         }
     }
 
-    return 'claude-sonnet-4-6';
+    return 'claude-sonnet-5-5';
 });
 ```
 
 ---
 
-For available model IDs and capabilities, see the [Models page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/models) or the [Models API reference](https://platform.claude.com/docs/en/api/models/list) on the Anthropic docs.
+For every capability field, the beta-only `allowedFallbackModels` and compaction capability, and backward pagination, see the [Models page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/models) or the [Models API reference](https://platform.claude.com/docs/en/api/models/list) on the Anthropic docs.

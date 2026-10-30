@@ -11,9 +11,9 @@ Under the hood, every request is handled by the underlying PHP package, so you g
 
 ## Why this package
 
-**One Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, `Anthropic::completions()`. No factory setup, no client instantiation. The service provider handles it.
+**One Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, and the deprecated `Anthropic::completions()`. No factory setup, no client instantiation. The service provider handles it.
 
-**Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env`, and you're ready to go.
+**Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env` (plus the optional API version and base URL lines, commented out), and you're ready to go.
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake one, queue responses, and assert exactly which requests were sent. This pairs with Laravel's existing testing idioms (`Event::fake()`, `Queue::fake()`) so your test code stays consistent.
 
@@ -35,7 +35,7 @@ Run the install command:
 php artisan anthropic:install
 ```
 
-This publishes `config/anthropic.php` to your project and appends `ANTHROPIC_API_KEY=` to your `.env` file. Fill it in with your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
+This publishes `config/anthropic.php` to your project and adds `ANTHROPIC_API_KEY=` to your `.env` file, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out. Fill in your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
@@ -51,7 +51,7 @@ Use the `Anthropic` Facade anywhere in your app:
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
@@ -65,7 +65,7 @@ The response is a typed, readonly object with properties for the message ID, mod
 
 ```php
 $response->id;                  // 'msg_01BSy0WCV7QR2adFBauynAX7'
-$response->model;               // 'claude-sonnet-4-6'
+$response->model;               // 'claude-sonnet-5-5'
 $response->stop_reason;         // 'end_turn'
 $response->usage->inputTokens;  // 10
 $response->usage->outputTokens; // 19
@@ -102,7 +102,7 @@ $this->post('/ask', ['question' => 'What is the capital of France?']);
 
 // Then assert what was sent
 Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
-    return $method === 'create' && $parameters['model'] === 'claude-sonnet-4-6';
+    return $method === 'create' && $parameters['model'] === 'claude-sonnet-5-5';
 });
 ```
 
@@ -122,7 +122,7 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Models](./usage/models.md): List and inspect available models
 - [Batches](./usage/batches.md): Process large volumes of requests asynchronously
 - [Files](./usage/files.md): Upload documents once, reference them by `file_id` in later requests
-- [Completions](./usage/completions.md): Legacy Text Completions API
+- [Completions](./usage/completions.md): The deprecated Text Completions API
 
 **Reference** covers cross-cutting concerns:
 

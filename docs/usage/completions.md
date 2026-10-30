@@ -3,9 +3,11 @@ title: Completions
 weight: 10
 ---
 
-> **Legacy API.** The Text Completions API is Anthropic's older interface. For new projects, use the [Messages API](./messages.md) instead.
+> **Deprecated.** The API now rejects Text Completions requests on current models with a 400 saying the endpoint has been deprecated. Use the [Messages API](./messages.md) instead.
 
-The Completions resource is included for backward compatibility with projects that still use it.
+`Anthropic::completions()` stays for code that still references it. The resource behind it is marked `@deprecated`, so PHPStan's deprecation rules flag the `create()` and `createStreamed()` calls chained on it, through the facade too. The facade's own `completions()` can't carry the deprecation in its `@method` docblock, so an IDE may not strike it through; search your code for `Anthropic::completions(` when you move off it.
+
+The examples below show the request and response shapes. They use `claude-2.1`, a retired model, and don't run against today's API.
 
 ## Creating a completion
 
@@ -38,6 +40,22 @@ $stream = Anthropic::completions()->createStreamed([
 foreach ($stream as $response) {
     echo $response->completion;
 }
+```
+
+## Moving to Messages
+
+The prompt becomes a user message, and `max_tokens_to_sample` becomes `max_tokens`. Leave `temperature` out: current models return a 400 for it.
+
+```php
+$response = Anthropic::messages()->create([
+    'model' => 'claude-sonnet-5-5',
+    'max_tokens' => 100,
+    'messages' => [
+        ['role' => 'user', 'content' => 'Hello, Claude'],
+    ],
+]);
+
+collect($response->content)->firstWhere('type', 'text')?->text;
 ```
 
 ---

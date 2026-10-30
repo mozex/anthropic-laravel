@@ -23,7 +23,7 @@ $file->mimeType;  // 'application/pdf'
 $file->sizeBytes; // 1024000
 ```
 
-Any readable stream works: `fopen()`, `Storage::readStream()`, `$request->file('pdf')->openFile()->detach()`, or a raw PSR-7 stream. Max size is 500 MB per file, 500 GB per org.
+Any readable stream works: `fopen()` on a path, `Storage::readStream()` on a local disk, or a PSR-7 stream. The file's name on the API comes from the stream's path, so an uploaded file, or a remote disk's stream that may have no path, needs [one more step](#uploading-from-a-request). Max size is 500 MB per file, 500 GB per org.
 
 Keep the `id` on an Eloquent model so you can reuse it later:
 
@@ -40,13 +40,33 @@ $document = Document::create([
 ]);
 ```
 
+### Uploading from a request
+
+PHP stores an uploaded file under a temporary name such as `phpA1B2.tmp`, without the original file's extension, and the API would keep that as the file's name and miss its type. Open the temporary file and give the stream the original name, so the upload carries both:
+
+```php
+use GuzzleHttp\Psr7\Utils;
+
+$upload = $request->file('pdf');
+
+$file = Anthropic::files()->upload([
+    'file' => Utils::streamFor(fopen($upload->getRealPath(), 'r'), [
+        'metadata' => ['uri' => $upload->getClientOriginalName()],
+    ]),
+]);
+
+$file->filename; // 'lease.pdf'
+```
+
+The request then sends `filename="lease.pdf"` with `Content-Type: application/pdf`, read from the extension. The original name comes from the browser, so strip characters such as `"` from it, or validate the upload's name, before you pass it on.
+
 ## Referencing a file in a message
 
 Drop the ID into a `document` content block. Note the `betas` key on the Messages call: the Messages endpoint also needs the Files API beta header when a `file_id` is referenced, and the SDK only auto-injects on `Anthropic::files()` calls. Pass it explicitly here:
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-opus-4-6',
+    'model' => 'claude-opus-5-5',
     'max_tokens' => 1024,
     'betas' => ['files-api-2025-04-14'],
     'messages' => [[
@@ -153,11 +173,16 @@ Deletes are permanent. In-flight Messages calls that already started may keep wo
 
 ```php
 use Anthropic\Exceptions\ErrorException;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Support\Facades\Log;
+
+$upload = $request->file('pdf');
 
 try {
     $file = Anthropic::files()->upload([
-        'file' => $request->file('pdf')->openFile()->detach(),
+        'file' => Utils::streamFor(fopen($upload->getRealPath(), 'r'), [
+            'metadata' => ['uri' => $upload->getClientOriginalName()],
+        ]),
     ]);
 } catch (ErrorException $e) {
     Log::warning('Anthropic file upload failed', [

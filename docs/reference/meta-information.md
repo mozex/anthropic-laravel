@@ -11,7 +11,7 @@ Every API response includes HTTP headers with rate limit data, request IDs, and 
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello, world'],
@@ -35,6 +35,13 @@ Log::info('Claude response', [
     'input_tokens' => $response->usage->inputTokens,
     'output_tokens' => $response->usage->outputTokens,
 ]);
+```
+
+The organization and workspace behind the response are typed too, useful in logs when one app holds keys for several workspaces:
+
+```php
+$meta->organizationId;
+$meta->workspaceId; // the workspace the key resolved to; null on Admin API requests
 ```
 
 ## Rate limits
@@ -80,6 +87,8 @@ if ($meta->priorityInputTokenLimit === null) {
 }
 ```
 
+Fast mode requests have their own buckets in the same shape, `$meta->fastInputTokenLimit?->...` and `$meta->fastOutputTokenLimit?->...`, `null` on other requests.
+
 ## Throttling based on remaining limits
 
 If you're doing high-volume work, check the remaining requests and throttle before you hit a 429:
@@ -96,6 +105,27 @@ if ($meta->requestLimit->remaining < 10) {
 ```
 
 Your next job can check the cache flag before making a request.
+
+## Retry-After in a queued job
+
+`$meta->retryAfter` reads the `Retry-After` header as seconds. A successful response rarely has it: the API sends it with a 429, which throws. Build the meta from the exception's response to release the job for as long as the API asks:
+
+```php
+use Anthropic\Exceptions\RateLimitException;
+use Anthropic\Responses\Meta\MetaInformation;
+
+try {
+    $response = Anthropic::messages()->create([...]);
+} catch (RateLimitException $e) {
+    $meta = MetaInformation::from($e->response?->getHeaders() ?? []);
+
+    $this->release($meta->retryAfter ?? 60);
+
+    return;
+}
+```
+
+A 429 for an organization that reached its tier's monthly spend cap carries no `Retry-After`; retrying won't help until access resumes.
 
 ## On streams
 
@@ -125,4 +155,4 @@ $results->meta();
 
 ---
 
-For the full header list and the raw `toArray()` format, see the [Meta Information page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/meta-information) or the [rate limits guide](https://platform.claude.com/docs/en/api/rate-limits) on the Anthropic docs.
+For the full header list, the fast mode limits and the raw `toArray()` format, see the [Meta Information page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/meta-information) or the [rate limits guide](https://platform.claude.com/docs/en/api/rate-limits) on the Anthropic docs.

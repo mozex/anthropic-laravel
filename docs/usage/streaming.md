@@ -11,7 +11,7 @@ Streaming lets you receive Claude's response as it's generated. Perfect for chat
 use Anthropic\Laravel\Facades\Anthropic;
 
 $stream = Anthropic::messages()->createStreamed([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Tell me a short story.'],
@@ -38,7 +38,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 Route::post('/chat', function () {
     $stream = Anthropic::messages()->createStreamed([
-        'model' => 'claude-sonnet-4-6',
+        'model' => 'claude-sonnet-5-5',
         'max_tokens' => 1024,
         'messages' => request('messages'),
     ]);
@@ -72,7 +72,7 @@ class AskClaudeJob implements ShouldQueue
     public function handle(): void
     {
         $stream = Anthropic::messages()->createStreamed([
-            'model' => 'claude-sonnet-4-6',
+            'model' => 'claude-sonnet-5-5',
             'max_tokens' => 4096,
             'messages' => $this->messages,
         ]);
@@ -91,6 +91,37 @@ class AskClaudeJob implements ShouldQueue
     }
 }
 ```
+
+## Refusals while streaming
+
+A refusal can come after part of the answer has already streamed. It arrives on the `message_delta` event, with `stop_reason` set to `'refusal'` and the reason in `delta->stop_details`. Treat the text you've streamed as incomplete, and tell the browser to drop it:
+
+```php
+use Illuminate\Support\Facades\Log;
+
+foreach ($stream as $response) {
+    if ($response->type === 'content_block_delta'
+        && $response->delta->type === 'text_delta') {
+        $fullText .= $response->delta->text;
+        ChunkReceived::dispatch($this->conversationId, $response->delta->text);
+    }
+
+    if ($response->type === 'message_delta'
+        && $response->delta->stop_reason === 'refusal') {
+        Log::warning('Claude refused mid-stream', [
+            'conversation_id' => $this->conversationId,
+            'category' => $response->delta->stop_details?->category,
+        ]);
+
+        StreamRefused::dispatch($this->conversationId); // the UI clears the partial reply
+        $this->message->update(['content' => null, 'status' => 'refused']);
+
+        return;
+    }
+}
+```
+
+`StreamRefused` is your own broadcast event, like `ChunkReceived`. Before the user goes on, drop or rephrase the turn that caused the refusal: sending the same conversation again usually gets another one.
 
 ## Stopping a stream mid-generation
 
@@ -119,9 +150,11 @@ foreach ($stream as $response) {
 | `content_block_start` | Start of each content block | Block type and index |
 | `content_block_delta` | Multiple times per block | Incremental content (text, JSON fragments, thinking) |
 | `content_block_stop` | End of each content block | Block index |
-| `message_delta` | Once, near the end | Stop reason and final usage |
+| `message_delta` | Once, near the end | Stop reason, `stop_details` on a refusal, the code execution `container`, and final usage |
 
 The client skips `ping` and ends the loop at `message_stop`. Any other event type reaches your loop, including ones the API adds later, so check `$event->type` rather than assuming this table is complete. An error mid-stream throws an `ErrorException` (see [Error Handling](../reference/error-handling.md)).
+
+Some blocks arrive whole in `content_block_start` with no deltas: an on-demand `compaction` block (its `content` is the summary string), `fallback` and `advisor_tool_result`.
 
 ---
 

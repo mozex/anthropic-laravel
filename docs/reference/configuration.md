@@ -3,7 +3,7 @@ title: Configuration
 weight: 1
 ---
 
-Configuration happens through `config/anthropic.php` and environment variables. Run `php artisan anthropic:install` to publish the config file and add `ANTHROPIC_API_KEY=` to your `.env` automatically.
+Configuration happens through `config/anthropic.php` and environment variables. Run `php artisan anthropic:install` to publish the config file and add `ANTHROPIC_API_KEY=` to your `.env` and `.env.example`, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out.
 
 ## Config file
 
@@ -17,10 +17,12 @@ return [
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
     ))),
+    'api_version' => env('ANTHROPIC_API_VERSION'),
+    'base_url' => env('ANTHROPIC_BASE_URL'),
 ];
 ```
 
-Three options. API key, timeout, and a list of Anthropic beta features to opt into.
+Five options: the API key, the timeout, a list of Anthropic beta features to opt into, the API version, and a base URL for a proxy or gateway. The last two are empty by default, so the client keeps its own defaults.
 
 ## Environment variables
 
@@ -35,6 +37,8 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 | `ANTHROPIC_API_KEY` | None (required) | Your API key from the [Anthropic Console](https://platform.claude.com/settings/keys) |
 | `ANTHROPIC_REQUEST_TIMEOUT` | `30` | HTTP request timeout in seconds |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
+| `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
+| `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
 
 If `ANTHROPIC_API_KEY` is missing or not a string when the client is resolved, the service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`.
 
@@ -54,6 +58,34 @@ You'll want a longer timeout when:
 - Getting non-streamed responses where you want the full message back
 
 For streamed requests, the timeout applies to the initial connection. After that, data flows chunk-by-chunk.
+
+## API version
+
+```env
+ANTHROPIC_API_VERSION=2026-10-21
+```
+
+Requests go out with `anthropic-version: 2023-06-01` unless you set this. Version `2026-10-21` rejects some requests the older one accepts: `temperature`, `top_p` and `top_k` return a 400 on every model, and so do `document` blocks placed directly in an assistant message. Read the [migration guide](https://platform.claude.com/docs/en/api/migration-2026-10-21) before you switch.
+
+Other packages read the same variable. Prism does, so setting it in `.env` switches Prism's Anthropic requests to that version too. That's why the install command adds it commented out: an empty `ANTHROPIC_API_VERSION=` line would hand Prism an empty version.
+
+## Base URL
+
+```env
+ANTHROPIC_BASE_URL=https://gateway.example.com/anthropic
+```
+
+Point the client at a proxy or an AI gateway. The value means the same as it does to the official Anthropic SDKs and Claude Code: the URL without the API's `/v1`. The package adds `/v1` unless the URL already ends in it, so a gateway's documented `ANTHROPIC_BASE_URL` works as it is. The example above sends requests to `https://gateway.example.com/anthropic/v1/messages`.
+
+A few things to know before you set it:
+
+- Claude Code and the official SDKs read the same variable, so a value exported in your shell wins over `.env` for `php artisan` commands, queue workers and `php artisan serve`, and that host receives your API key with every request. Run `php artisan config:cache` in that shell and the value is baked into the cached config, so web requests use it too.
+- An `http://` URL sends the key in clear text. Use `https://` for anything outside your own machine.
+- With a cached config, run `php artisan config:clear` (or `config:cache` again) after changing either variable.
+
+## Upgrading an older config file
+
+A `config/anthropic.php` published by an earlier release has neither `api_version` nor `base_url`, and the package doesn't merge its defaults into your file, so the two variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
 
 ## Beta features
 
@@ -87,7 +119,7 @@ Pass a `betas` array inside the parameters you hand to any resource method. The 
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-opus-4-6',
+    'model' => 'claude-opus-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
@@ -110,7 +142,7 @@ A typical pattern: keep stable betas your team has adopted in config, opt into e
 
 // Specific call adds another beta for this request only
 Anthropic::messages()->create([
-    'model' => 'claude-opus-4-6',
+    'model' => 'claude-opus-5-5',
     'max_tokens' => 1024,
     'messages' => [...],
     'betas' => ['interleaved-thinking-2025-05-14'],
@@ -143,12 +175,34 @@ If you change the API key or timeout, run `php artisan config:clear` to pick up 
 
 ## Publishing the config file manually
 
-The install command publishes the config as part of its flow. If you need to publish it again (e.g., after an update), run:
+The install command publishes the config as part of its flow. To publish it yourself, run:
 
 ```bash
 php artisan vendor:publish --tag=anthropic-config
 ```
 
+It leaves an existing `config/anthropic.php` alone unless you add `--force`, which overwrites your changes. To bring an older file up to date, see [Upgrading an older config file](#upgrading-an-older-config-file).
+
 ## Using a custom HTTP client
 
-The default client is Guzzle with the configured timeout. If you need different HTTP client behavior (custom middleware, retries, a different PSR-18 implementation), bind the `Anthropic\Contracts\ClientContract` yourself in a service provider. Full examples are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).
+The default client is Guzzle with the configured timeout. If you need different HTTP client behavior (custom middleware, retries, a different PSR-18 implementation), replace the client with `extend()` in a service provider's `register()` method:
+
+```php
+use Anthropic;
+use Anthropic\Contracts\ClientContract;
+use GuzzleHttp\Client as Guzzle;
+
+public function register(): void
+{
+    $this->app->extend(ClientContract::class, fn () => Anthropic::factory()
+        ->withApiKey(config('anthropic.api_key'))
+        ->withApiVersion((string) config('anthropic.api_version'))
+        ->withHttpHeader('anthropic-beta', implode(',', config('anthropic.beta', [])))
+        ->withHttpClient(new Guzzle(['timeout' => 120, 'connect_timeout' => 5]))
+        ->make());
+}
+```
+
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default). For `base_url`, pass `withBaseUri()` the URL with `/v1` added, as the package does. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
+
+Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).

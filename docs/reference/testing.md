@@ -20,7 +20,7 @@ Anthropic::fake([
 ]);
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
@@ -52,8 +52,8 @@ Every response class has a `fake()` method with sensible defaults:
 | `Messages\CreateResponse::fake()` | Messages create |
 | `Messages\CountTokensResponse::fake()` | Token counting |
 | `Messages\CreateStreamedResponse::fake()` | Messages streaming |
-| `Completions\CreateResponse::fake()` | Completions create |
-| `Completions\CreateStreamedResponse::fake()` | Completions streaming |
+| `Completions\CreateResponse::fake()` | Completions create (deprecated) |
+| `Completions\CreateStreamedResponse::fake()` | Completions streaming (deprecated) |
 | `Models\ListResponse::fake()` | Models list |
 | `Models\RetrieveResponse::fake()` | Models retrieve |
 | `Batches\BatchResponse::fake()` | Batch create/retrieve/cancel |
@@ -90,7 +90,7 @@ Anthropic::assertSent(Messages::class);
 // With a callback
 Anthropic::assertSent(Messages::class, function (string $method, array $parameters): bool {
     return $method === 'create'
-        && $parameters['model'] === 'claude-sonnet-4-6';
+        && $parameters['model'] === 'claude-sonnet-5-5';
 });
 
 // Exact count
@@ -100,7 +100,7 @@ Anthropic::assertSent(Messages::class, 2);
 ### assertNotSent
 
 ```php
-Anthropic::assertNotSent(\Anthropic\Resources\Completions::class);
+Anthropic::assertNotSent(\Anthropic\Resources\Batches::class);
 ```
 
 ### assertNothingSent
@@ -118,7 +118,7 @@ Anthropic::messages()->assertSent(function (string $method, array $parameters): 
     return $method === 'create';
 });
 
-Anthropic::completions()->assertNotSent();
+Anthropic::batches()->assertNotSent();
 ```
 
 ## Testing controllers
@@ -171,17 +171,20 @@ Pass an exception as a fake response. It will be thrown when the matching reques
 
 ```php
 use Anthropic\Exceptions\ErrorException;
+use GuzzleHttp\Psr7\Response;
 
 Anthropic::fake([
     new ErrorException([
         'message' => 'Overloaded',
         'type' => 'overloaded_error',
-    ], 529),
+    ], new Response(529)),
 ]);
 
 // This throws ErrorException
 Anthropic::messages()->create([...]);
 ```
+
+Pass a PSR-7 response as the second argument, as the client does, so the code under test can read headers from `$e->response`. A job that releases on a 429 can be tested with `new RateLimitException([...], new Response(429, ['retry-after' => '30']))`. An `int` status code in place of the response is deprecated.
 
 ## Testing streamed responses
 
@@ -213,7 +216,7 @@ function fakeStream(array $parts)
                 'id' => 'msg_test',
                 'type' => 'message',
                 'role' => 'assistant',
-                'model' => 'claude-sonnet-4-6',
+                'model' => 'claude-sonnet-5-5',
                 'content' => [],
                 'stop_reason' => null,
                 'stop_sequence' => null,

@@ -11,7 +11,7 @@ The token counting endpoint tells you how many input tokens a message would use 
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->countTokens([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'messages' => [
         ['role' => 'user', 'content' => 'Hello, world'],
     ],
@@ -39,7 +39,7 @@ $messages = $conversation->messages()
     ->toArray();
 
 $count = Anthropic::messages()->countTokens([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'messages' => $messages,
 ]);
 
@@ -49,7 +49,7 @@ if ($count->inputTokens > 180000) {
 }
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => $messages,
 ]);

@@ -45,7 +45,7 @@ Business sponsors get logo placement in package READMEs. [**See sponsorship tier
 
 ## Why This Package
 
-**`Anthropic::` Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, `Anthropic::completions()`. No client instantiation, no factory setup. The service provider handles it.
+**`Anthropic::` Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, and the deprecated `Anthropic::completions()`. No client instantiation, no factory setup. The service provider handles it.
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake, queue responses, and assert exactly which requests were sent. Pairs with Laravel's existing testing idioms like `Event::fake()` and `Queue::fake()`. [See the testing docs →](https://mozex.dev/docs/anthropic-laravel/v1/reference/testing)
 
@@ -63,11 +63,11 @@ Anthropic::fake([
 // Run your code...
 
 Anthropic::assertSent(Messages::class, function (string $method, array $parameters) {
-    return $parameters['model'] === 'claude-sonnet-4-6';
+    return $parameters['model'] === 'claude-sonnet-5-5';
 });
 ```
 
-**One artisan command to set up.** `php artisan anthropic:install` publishes the config file and appends `ANTHROPIC_API_KEY=` to your `.env`. You're ready to go.
+**One artisan command to set up.** `php artisan anthropic:install` publishes the config file and adds `ANTHROPIC_API_KEY=` to your `.env`, with the optional `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` lines commented out. You're ready to go.
 
 **Forward-compatible.** Parameters pass through to the API as-is. When Anthropic ships a new feature, it works in your code the same day. No waiting for a package update.
 
@@ -87,7 +87,7 @@ Run the install command:
 php artisan anthropic:install
 ```
 
-This publishes `config/anthropic.php` and appends `ANTHROPIC_API_KEY=` to your `.env`. Set your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
+This publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to your `.env`, plus two optional settings commented out. Set your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
@@ -101,7 +101,7 @@ Use the `Anthropic` Facade anywhere in your app:
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello!'],
@@ -117,7 +117,7 @@ Print text as it arrives:
 
 ```php
 $stream = Anthropic::messages()->createStreamed([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Tell me a short story.'],
@@ -138,7 +138,7 @@ Give Claude tools to call, execute them in your code, send results back:
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'tools' => [
         [
@@ -168,9 +168,9 @@ Let Claude reason through complex problems before answering:
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-opus-4-6',
+    'model' => 'claude-opus-5-5',
     'max_tokens' => 16000,
-    'thinking' => ['type' => 'adaptive'],
+    'thinking' => ['type' => 'adaptive', 'display' => 'summarized'],
     'messages' => [
         ['role' => 'user', 'content' => 'What is the GCD of 1071 and 462?'],
     ],

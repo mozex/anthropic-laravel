@@ -11,7 +11,7 @@ Tool use (function calling) lets you give Claude custom functions it can call du
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'tools' => [
         [
@@ -57,7 +57,7 @@ Execute the tool in your Laravel code, then send the result back in a second req
 ```php
 // First request
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'tools' => $tools,
     'messages' => [
@@ -72,7 +72,7 @@ $weather = app(WeatherService::class)->get(
 
 // Second request with the result
 $followUp = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'tools' => $tools,
     'messages' => [
@@ -91,7 +91,7 @@ $followUp = Anthropic::messages()->create([
     ],
 ]);
 
-echo $followUp->content[0]->text;
+echo collect($followUp->content)->firstWhere('type', 'text')?->text;
 // "The current weather in San Francisco is 65°F with partly cloudy skies."
 ```
 
@@ -108,23 +108,41 @@ $toolRegistry = [
     'send_email' => EmailService::class,
 ];
 
-foreach ($response->content as $block) {
-    if ($block->type === 'tool_use' && $block->caller?->type === 'direct') {
-        $service = app($toolRegistry[$block->name]);
-        $result = $service->handle($block->input);
+$toolsets = [
+    'computer' => ComputerActions::class,
+    'browser' => BrowserActions::class,
+];
 
+foreach ($response->content as $block) {
+    if ($block->type !== 'tool_use') {
+        continue;
+    }
+
+    if ($block->toolset_name !== null) {
+        // A computer or browser toolset member: dispatch on the pair, echo the toolset
         $results[] = [
             'type' => 'tool_result',
             'tool_use_id' => $block->id,
-            'content' => json_encode($result),
+            'toolset_name' => $block->toolset_name,
+            'content' => app($toolsets[$block->toolset_name])->run($block->name, $block->input),
         ];
+
+        continue;
     }
+
+    $results[] = [
+        'type' => 'tool_result',
+        'tool_use_id' => $block->id,
+        'content' => json_encode(app($toolRegistry[$block->name])->handle($block->input)),
+    ];
 }
 ```
 
 Each service handles one tool. The dispatcher finds the right class via the container, which means you get full dependency injection, interfaces, and testability.
 
-The `caller?->type === 'direct'` check matters once you mix custom tools with server tools like code execution. Claude can invoke your tools indirectly from inside a code execution sandbox, in which case `caller->type` is a date-versioned identifier like `'code_execution_20260120'` and Anthropic has already handled the call. Running it again would duplicate the work.
+The `toolset_name` check matters once you give Claude the computer or browser toolset (`['type' => 'computer_toolset_20260801']`). Their member tools (`screenshot`, `left_click`, `navigate` ...) arrive as ordinary `tool_use` blocks, and a custom tool of yours can share a member's name. Dispatch on `toolset_name` and `name` together, never on `name` alone. Send `toolset_name` back on every member's result and only on those: the API rejects a member result without it.
+
+Calls Claude makes from its code execution sandbox ([programmatic tool calling](https://mozex.dev/docs/anthropic-php/v1/usage/server-tools#calling-your-tools-from-code-execution)) come through the same loop with `caller->type` set to `'code_execution_20260120'`. Run them like any other call: the sandbox waits for your answer, about four minutes at most. The reply to them holds only `tool_result` blocks, no text, and the request passes the paused response's `container` ID.
 
 ## Error results
 
@@ -159,8 +177,8 @@ The `tool_choice` parameter influences when Claude uses tools:
 'tool_choice' => ['type' => 'none']
 ```
 
-When using [extended thinking](./thinking.md), only `auto` and `none` are supported.
+Claude Opus 5.5, Sonnet 5.5, Fable 5.1 and Mythos 5.1 return a 400 for `any` and `tool`, and so does budget-based [thinking](./thinking.md) on any model; use `auto` with `'strict' => true` there.
 
 ---
 
-For the full tool use workflow, multiple tool calls, strict schema validation, and the complete `tool_choice` reference, see the [Tool Use page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/tool-use) or the [Tool use guide](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) on the Anthropic docs.
+For the full tool use workflow, multiple tool calls, the computer and browser toolsets, strict schema validation, and the complete `tool_choice` reference, see the [Tool Use page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/tool-use) or the [Tool use guide](https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview) on the Anthropic docs.

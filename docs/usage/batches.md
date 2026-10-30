@@ -15,7 +15,7 @@ $response = Anthropic::batches()->create([
         [
             'custom_id' => 'request-1',
             'params' => [
-                'model' => 'claude-sonnet-4-6',
+                'model' => 'claude-sonnet-5-5',
                 'max_tokens' => 1024,
                 'messages' => [
                     ['role' => 'user', 'content' => 'What is the capital of France?'],
@@ -25,7 +25,7 @@ $response = Anthropic::batches()->create([
         [
             'custom_id' => 'request-2',
             'params' => [
-                'model' => 'claude-sonnet-4-6',
+                'model' => 'claude-sonnet-5-5',
                 'max_tokens' => 1024,
                 'messages' => [
                     ['role' => 'user', 'content' => 'What is the capital of Germany?'],
@@ -107,7 +107,7 @@ class ProcessBatchResultsJob implements ShouldQueue
             if ($individual->result->type === 'succeeded') {
                 Answer::create([
                     'request_id' => $individual->customId,
-                    'content' => $individual->result->message->content[0]->text,
+                    'content' => collect($individual->result->message->content)->firstWhere('type', 'text')?->text,
                 ]);
             }
 
@@ -115,6 +115,7 @@ class ProcessBatchResultsJob implements ShouldQueue
                 Log::error('Batch request failed', [
                     'custom_id' => $individual->customId,
                     'error' => $individual->result->error->message,
+                    'request_id' => $individual->result->error->requestId, // can be null
                 ]);
             }
         }

@@ -11,7 +11,7 @@ The Messages API is the primary way to interact with Claude. Send messages using
 use Anthropic\Laravel\Facades\Anthropic;
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Hello, world'],
@@ -23,7 +23,7 @@ The response is a `CreateResponse` object with typed properties:
 
 ```php
 $response->id;            // 'msg_01BSy0WCV7QR2adFBauynAX7'
-$response->model;         // 'claude-sonnet-4-6'
+$response->model;         // 'claude-sonnet-5-5'
 $response->stop_reason;   // 'end_turn'
 $response->content[0]->text; // 'Hello! How can I assist you today?'
 
@@ -37,7 +37,7 @@ The Anthropic API is stateless, so you pass the full conversation history on eve
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'What is PHP?'],
@@ -62,7 +62,7 @@ $messages = $conversation->messages()
     ->toArray();
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => $messages,
 ]);
@@ -74,7 +74,7 @@ Pass instructions, persona, or context through the `system` parameter:
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'system' => 'You are a helpful PHP expert. Answer concisely.',
     'messages' => [
@@ -93,7 +93,7 @@ Claude can read images alongside text. Pass an array of content blocks instead o
 $imagePath = storage_path('app/photos/receipt.jpg');
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         [
@@ -127,7 +127,7 @@ $file = Storage::disk('s3')->get('uploads/photo.jpg');
 $mimeType = Storage::disk('s3')->mimeType('uploads/photo.jpg');
 
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         [
@@ -163,7 +163,7 @@ Pass a `metadata.user_id` with each request to associate it with a user in your 
 
 ```php
 $response = Anthropic::messages()->create([
-    'model' => 'claude-sonnet-4-6',
+    'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'metadata' => [
         'user_id' => auth()->user()->uuid,
@@ -188,7 +188,7 @@ class AskClaudeJob implements ShouldQueue
     public function handle(): void
     {
         $response = Anthropic::messages()->create([
-            'model' => 'claude-sonnet-4-6',
+            'model' => 'claude-sonnet-5-5',
             'max_tokens' => 4096,
             'metadata' => ['user_id' => (string) $this->userId],
             'messages' => [
@@ -198,13 +198,15 @@ class AskClaudeJob implements ShouldQueue
 
         Answer::create([
             'user_id' => $this->userId,
-            'content' => $response->content[0]->text,
+            'content' => collect($response->content)->firstWhere('type', 'text')?->text,
         ]);
     }
 }
 ```
 
-Bump `ANTHROPIC_REQUEST_TIMEOUT` in your `.env` to match the expected response time so the HTTP client doesn't cut the request short.
+Bump `ANTHROPIC_REQUEST_TIMEOUT` in your `.env` to match the expected response time so the HTTP client doesn't cut the request short, and keep the queue connection's `retry_after` (in `config/queue.php`) above the job's `$timeout`. Otherwise the worker hands the job to another process while the first is still waiting on Claude, and you pay for the call twice.
+
+The job reads the `text` block rather than `content[0]`: every Claude 5 model thinks by default, so a reply to a harder question can start with a `thinking` block.
 
 ## Handling refusals
 
@@ -225,6 +227,8 @@ if ($response->stop_reason === 'refusal') {
 ```
 
 `stop_details` is `null` on normal completions, so only touch it when `stop_reason === 'refusal'`. Treat `category` as the machine-readable signal; the `explanation` text isn't stable between calls.
+
+Sending the same conversation again usually gets another refusal, so drop or rephrase the turn that caused it before the user continues. A refusal while streaming arrives at the end of the stream, after some text may already be on screen; the [streaming page](./streaming.md#refusals-while-streaming) shows how to handle it.
 
 ### Falling back to another model
 
@@ -266,7 +270,7 @@ class ContinueClaudeJob implements ShouldQueue
 
         do {
             $response = Anthropic::messages()->create([
-                'model' => 'claude-sonnet-4-6',
+                'model' => 'claude-sonnet-5-5',
                 'max_tokens' => 8192,
                 'messages' => $messages,
             ]);
@@ -292,6 +296,32 @@ No special parameter is needed to resume; just echo the paused content back.
 $response->usage->inferenceGeo; // 'us', 'eu', or null
 ```
 
+## Compaction
+
+For long conversations, the compaction betas let the API summarize earlier turns into a `compaction` block. Store the assistant content as `toArray()` returns it, which keeps the block's `signature`, and send it back unchanged:
+
+```php
+$response = Anthropic::messages()->create([
+    'model' => 'claude-opus-5-5',
+    'max_tokens' => 4096,
+    'betas' => ['compact-2026-09-04'],
+    'compaction' => ['type' => 'summarize'],
+    'messages' => $conversation->messagesArray(),
+]);
+
+if ($response->stop_reason === 'compaction') {
+    // One signed compaction block: it replaces the turns it summarized
+    $conversation->update([
+        'history' => [['role' => 'assistant', 'content' => $response->toArray()['content']]],
+    ]);
+} else {
+    // No summary (max_tokens, refusal ...): keep the history as it is
+    Log::warning('Claude compaction produced no summary', ['stop_reason' => $response->stop_reason]);
+}
+```
+
+Cast `history` to `array` on the model. An edited block, or one with an extra key, returns a 400, and every later request needs the same beta header. The PHP docs cover [threshold compaction](https://mozex.dev/docs/anthropic-php/v1/usage/messages#compaction-at-a-threshold) and the placement rules.
+
 ## Passing any parameter
 
 This package doesn't validate or transform request parameters. Anything you pass in the array goes directly to the Anthropic API. New API parameters work immediately, before the package adds explicit support:
@@ -301,13 +331,16 @@ $response = Anthropic::messages()->create([
     'model' => 'claude-sonnet-4-6',
     'max_tokens' => 1024,
     'temperature' => 0.7,
-    'top_p' => 0.9,
     'stop_sequences' => ['```'],
     'messages' => [
         ['role' => 'user', 'content' => 'Write a haiku about PHP.'],
     ],
 ]);
 ```
+
+The example uses Sonnet 4.6 because the Claude 5 models, Opus 4.8 and Opus 4.7 return a 400 for any non-default `temperature`, `top_p` or `top_k`, and API version `2026-10-21` rejects them on every model.
+
+Mid-conversation `system` messages (instructions added partway through `messages`), fast mode and cache diagnostics also pass straight through; the PHP docs show each one.
 
 ---
 
