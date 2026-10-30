@@ -262,72 +262,24 @@ A job that releases on a 429 can be tested with `\Anthropic\Exceptions\RateLimit
 
 ## Testing streamed responses
 
-For streaming tests, pass a file resource:
+Pass `CreateStreamedResponse::fake()` the response it should stream, and the fake sends the events the API would for it, text deltas, thinking and tool input included:
 
 ```php
+use Anthropic\Responses\Messages\CreateResponse;
 use Anthropic\Responses\Messages\CreateStreamedResponse;
+use Anthropic\Testing\Blocks;
 
-Anthropic::fake([
-    CreateStreamedResponse::fake(fopen('tests/fixtures/stream.txt', 'r')),
-]);
-```
-
-Or build a stream from an array of text chunks with this helper:
-
-```php
-// In tests/Pest.php or a test helper file
-function fakeStream(array $parts)
-{
-    $events = collect($parts)
-        ->map(fn (string $part) => [
-            'type' => 'content_block_delta',
-            'index' => 0,
-            'delta' => ['type' => 'text_delta', 'text' => $part],
-        ])
-        ->prepend([
-            'type' => 'message_start',
-            'message' => [
-                'id' => 'msg_test',
-                'type' => 'message',
-                'role' => 'assistant',
-                'model' => 'claude-sonnet-5-5',
-                'content' => [],
-                'stop_reason' => null,
-                'stop_sequence' => null,
-                'usage' => ['input_tokens' => 10, 'output_tokens' => 1],
-            ],
-        ])
-        ->add([
-            'type' => 'message_delta',
-            'delta' => ['stop_reason' => 'end_turn', 'stop_sequence' => null],
-            'usage' => ['output_tokens' => 12],
-        ])
-        ->add(['type' => 'message_stop'])
-        ->map(fn (array $event) => "event: {$event['type']}\ndata: " . json_encode($event))
-        ->join("\n\n");
-
-    $handle = fopen('php://memory', 'r+');
-    fwrite($handle, $events);
-    rewind($handle);
-
-    return $handle;
-}
-```
-
-Use it in a test:
-
-```php
-it('streams text chunks', function () {
+it('streams the reply', function () {
     Anthropic::fake([
-        CreateStreamedResponse::fake(fakeStream(['Hello', ', ', 'world!'])),
+        CreateStreamedResponse::fake(CreateResponse::fake([
+            'content' => [Blocks::text('Hello, world!')],
+        ])),
     ]);
 
-    $stream = Anthropic::messages()->createStreamed([...]);
-
     $text = '';
-    foreach ($stream as $event) {
-        if ($event->type === 'content_block_delta'
-            && $event->delta->type === 'text_delta') {
+
+    foreach (Anthropic::messages()->createStreamed([...]) as $event) {
+        if ($event->type === 'content_block_delta' && $event->delta->type === 'text_delta') {
             $text .= $event->delta->text;
         }
     }
@@ -335,6 +287,28 @@ it('streams text chunks', function () {
     expect($text)->toBe('Hello, world!');
 });
 ```
+
+For exact control, pass a list of event arrays instead, or a file resource of recorded SSE. `Blocks` also builds `toolUse()`, `thinking()`, `serverToolUse()` and `webSearchToolResult()` blocks for a fake's `content`, and `BatchResultResponse::fake([...])` takes the result lines a batch's results would hold.
+
+## Record and replay
+
+`Anthropic::record()` runs a test against the real API once, saves the answers to a cassette file, then replays them on every later run, with no HTTP call and no key:
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+
+test('it summarizes an article', function () {
+    Anthropic::record(base_path('tests/cassettes/summary.json'));
+
+    $summary = app(SummarizeArticle::class)->handle($article);
+
+    expect($summary)->toContain('Laravel');
+});
+```
+
+It rebuilds the default connection from your config with the recorder as its innermost middleware, so your events, listeners and fallback models run on the recorded answers as they would on live ones. The first run needs `ANTHROPIC_API_KEY`; commit the cassette, and CI replays it. Pass `record: true` to record again. A cassette keeps each answer's body and the headers the client reads, never your key or your prompts.
+
+Only the default connection is recorded: the facade's calls and an injected `ClientContract`. `Anthropic::connection()`, `withApiKey()` and `organization()` still reach the API, so fake those with `Anthropic::fake()`, and a recorded test asserts on what your code returned, since the fake's `assertSent()` isn't there. Give each test, and each dataset row, its own cassette: a replay checks each request's method and path, not its body. See the [PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/testing#record-and-replay) for what a cassette holds.
 
 ## Adding responses dynamically
 

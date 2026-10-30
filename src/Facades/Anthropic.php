@@ -8,10 +8,12 @@ use Anthropic\Contracts\ClientContract;
 use Anthropic\Contracts\ResponseContract;
 use Anthropic\Contracts\ResponseStreamContract;
 use Anthropic\Laravel\AnthropicManager;
+use Anthropic\Laravel\ClientBuilder;
 use Anthropic\Laravel\Testing\AnthropicFake;
 use Anthropic\Responses\Completions\StreamResponse as CompletionsStreamResponse;
 use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
 use Anthropic\Responses\Raw\RawResponse;
+use Anthropic\Testing\Recorder;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;
 use RuntimeException;
@@ -107,5 +109,63 @@ class Anthropic extends Facade
         }
 
         return $fake;
+    }
+
+    /**
+     * Records the default connection's calls (the facade's and an injected ClientContract's) to a cassette file once,
+     * then replays them with no HTTP call: the client is rebuilt from the config with the recorder as its innermost
+     * middleware, so the events, the fallback and your client middleware run as they would, on the recorded answers.
+     * It records while the file is missing or `$record` is true, and a replay needs no key. Pass an absolute path:
+     * `base_path()` in an app, `__DIR__` in a package's tests. It takes over from an `Anthropic::fake()` made before.
+     */
+    public static function record(string $path, ?bool $record = null): Recorder
+    {
+        $app = static::$app;
+
+        if (! $app instanceof Application) {
+            throw new RuntimeException('Anthropic::record() needs the Laravel application.');
+        }
+
+        $app->loadDeferredProvider(ClientContract::class);
+
+        $recorder = Recorder::cassette($path, $record);
+        $config = $app->make('config')->get('anthropic', []);
+        $config = is_array($config) ? $config : [];
+        unset($config['connections']);
+
+        // One class name alone counts as a list, as it does in ClientBuilder.
+        $middleware = $config['middleware'] ?? [];
+
+        if (is_string($middleware)) {
+            $middleware = [$middleware];
+        }
+
+        $config['middleware'] = [...(is_array($middleware) ? $middleware : []), $recorder];
+        $config = ClientBuilder::withLaravelAi($config);
+
+        if (! ClientBuilder::hasCredential($config)) {
+            // Recording needs the API; a replay sends nothing, so it needs no key of yours.
+            if ($recorder->recording()) {
+                throw new RuntimeException("No cassette at [{$path}] to replay, and no key to record one with: set ANTHROPIC_API_KEY and run the test once.");
+            }
+
+            $config['api_key'] = 'replaying';
+        }
+
+        $client = ClientBuilder::make($app, $config, AnthropicManager::DEFAULT);
+        $app->instance(ClientContract::class, $client);
+
+        $manager = $app->bound(AnthropicManager::class) ? $app->make(AnthropicManager::class) : null;
+
+        if ($manager instanceof AnthropicManager) {
+            $manager->useFake(null);
+            $manager->forgetConnection(AnthropicManager::DEFAULT);
+            static::clearResolvedInstance(AnthropicManager::class);
+        } else {
+            // A container without the provider, where fake() made the fake the root: the recording client takes its place.
+            self::swap($client);
+        }
+
+        return $recorder;
     }
 }

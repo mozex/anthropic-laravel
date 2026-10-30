@@ -147,11 +147,11 @@ class AnthropicManager extends MultipleInstanceManager
     }
 
     /**
-     * Hands every connection the fake, from `Anthropic::fake()`.
+     * Hands every connection the fake, from `Anthropic::fake()`; null takes it back, as `Anthropic::record()` does.
      *
      * @internal
      */
-    public function useFake(AnthropicFake $fake): void
+    public function useFake(?AnthropicFake $fake): void
     {
         $this->fake = $fake;
     }

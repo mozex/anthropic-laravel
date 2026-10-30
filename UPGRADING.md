@@ -8,7 +8,7 @@ This release requires `mozex/anthropic-php` 1.13. Read its [upgrade notes](https
 
 **Likelihood Of Impact: Low**
 
-`Anthropic::fake()` with no responses used to throw on the first call. It now answers each call with its method's default fake until you queue a response. A test that relied on the throw adds `->preventStrayRequests()`. See the client's upgrade notes for the rest of the fake's changes.
+`Anthropic::fake()` with no responses used to throw on the first call. It now answers each call with its method's default fake until you queue a response. A test that relied on the throw adds `->preventStrayRequests()`. See the client's upgrade notes for the rest of the fake's changes, among them stream and batch-result fakes whose `meta()` now carries the other fakes' headers.
 
 ## To 1.12.0
 
