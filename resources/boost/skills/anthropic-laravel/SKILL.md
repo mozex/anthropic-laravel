@@ -33,12 +33,16 @@ composer require mozex/anthropic-laravel
 php artisan anthropic:install
 ```
 
-The install command publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to `.env` and `.env.example`, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out. Five keys, all env-backed:
+The install command publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to `.env` and `.env.example`, with the optional variables commented out. The keys:
 
 ```php
 return [
     'api_key' => env('ANTHROPIC_API_KEY'),
+    'auth_token' => env('ANTHROPIC_AUTH_TOKEN'),
+    'workspace_id' => env('ANTHROPIC_WORKSPACE_ID'),
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
+    'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
+    'headers' => [],
     'beta' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
@@ -48,11 +52,13 @@ return [
 ];
 ```
 
-`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. A config file published by an older release lacks both keys; re-running `anthropic:install` names what's missing.
+`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. `auth_token` sends `Authorization: Bearer` (a Workload Identity Federation access token) when no key is set, one credential as in the official SDKs (a shell-exported `ANTHROPIC_AUTH_TOKEN`, which Claude Code reads too, reaches an app without a key); `workspace_id` sends `anthropic-workspace-id`, needed by keys not scoped to one workspace; `connect_timeout` is the Guzzle connect timeout, which streamed requests ignore; `headers` (no env variable) go on every request, applied last. A config file published by an older release lacks the newer keys; re-running `anthropic:install` names what's missing.
+
+`Anthropic::withOptions(['workspace_id' => ..., 'betas' => [...], 'headers' => [...], 'query' => [...], 'api_version' => ..., 'user_profile_id' => ...])` returns a client for one tenant or feature, leaving the app-wide one unchanged; it's also how ID-only methods (`models()->retrieve()`) get betas. Under `Anthropic::fake()` it shares the fake's queue; assert with `Anthropic::assertSentWithOptions(Messages::class, ['workspace_id' => ...])`.
 
 `ANTHROPIC_BETA` takes a comma-separated list of beta names (`ANTHROPIC_BETA=compact-2026-01-12`). They go out in the `anthropic-beta` header on every request, merged with any `betas` array you pass on a single call.
 
-If `ANTHROPIC_API_KEY` is missing when the client resolves, the deferred service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The binding is a singleton, so `Anthropic::messages()`, `app('anthropic')`, and `app(\Anthropic\Contracts\ClientContract::class)` all resolve the same instance.
+If neither `ANTHROPIC_API_KEY` nor `ANTHROPIC_AUTH_TOKEN` is set when the client resolves, the deferred service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The binding is a singleton, so `Anthropic::messages()`, `app('anthropic')`, and `app(\Anthropic\Contracts\ClientContract::class)` all resolve the same instance.
 
 Raise `ANTHROPIC_REQUEST_TIMEOUT` to 60+ seconds for extended thinking on high/max effort, code execution with slow scripts, or very large contexts. Streaming only applies the timeout to the initial connection; chunks flow freely after that.
 

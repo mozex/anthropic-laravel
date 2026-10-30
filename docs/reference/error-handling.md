@@ -125,7 +125,7 @@ try {
 
 ## Missing API key
 
-If you haven't set `ANTHROPIC_API_KEY`, the first call throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`:
+If you've set neither `ANTHROPIC_API_KEY` nor `ANTHROPIC_AUTH_TOKEN`, the first call throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`:
 
 ```php
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;

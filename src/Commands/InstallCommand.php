@@ -29,6 +29,9 @@ class InstallCommand extends Command
         'ANTHROPIC_API_KEY' => 'ANTHROPIC_API_KEY=',
         'ANTHROPIC_API_VERSION' => '# ANTHROPIC_API_VERSION=',
         'ANTHROPIC_BASE_URL' => '# ANTHROPIC_BASE_URL=',
+        'ANTHROPIC_AUTH_TOKEN' => '# ANTHROPIC_AUTH_TOKEN=',
+        'ANTHROPIC_WORKSPACE_ID' => '# ANTHROPIC_WORKSPACE_ID=',
+        'ANTHROPIC_CONNECT_TIMEOUT' => '# ANTHROPIC_CONNECT_TIMEOUT=',
     ];
 
     protected $signature = 'anthropic:install';
@@ -74,7 +77,7 @@ class InstallCommand extends Command
             ]);
 
             if ($missingKeys !== []) {
-                $this->line(' Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php. Until then, their .env variables do nothing.');
+                $this->line(' Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php. Until then, those settings keep their defaults.');
             }
 
             return;

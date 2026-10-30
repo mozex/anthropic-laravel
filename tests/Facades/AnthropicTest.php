@@ -402,3 +402,42 @@ test('fake accepts exceptions and streams as responses', function () {
         ->toThrow(ErrorException::class, 'Overloaded')
         ->and(Anthropic::files()->download('file_011CNha8iCJcU1wXNR6q4V8w'))->toBe('file bytes');
 });
+
+test('a withOptions client from the facade fake shares its queue and records its options', function () {
+    $fake = Anthropic::fake([
+        MessagesCreateResponse::fake(),
+    ]);
+
+    Anthropic::withOptions(['workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ'])->messages()->create([
+        'model' => 'claude-sonnet-5-5',
+        'max_tokens' => 10,
+        'messages' => [['role' => 'user', 'content' => 'Hello']],
+    ]);
+
+    $fake->assertSent(Messages::class, 1);
+    $fake->assertSentWithOptions(Messages::class, ['workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ']);
+});
+
+test('withOptions on the facade returns a client with the options, leaving the bound one unchanged', function () {
+    $app = app();
+    $app->bind('config', fn () => new Repository([
+        // composed: workspace IDs shortened
+        'anthropic' => ['api_key' => 'test', 'workspace_id' => 'wrkspc_a'],
+    ]));
+    (new ServiceProvider($app))->register();
+    Facade::clearResolvedInstances();
+    Anthropic::setFacadeApplication($app);
+
+    $tenant = Anthropic::withOptions(['workspace_id' => 'wrkspc_b', 'betas' => ['compact-2026-09-04']]);
+
+    $headersOf = function (object $client): array {
+        $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
+
+        return (new ReflectionProperty($transporter, 'headers'))->getValue($transporter)->toArray();
+    };
+
+    expect($tenant)->toBeInstanceOf(Client::class)
+        ->and($headersOf($tenant)['anthropic-workspace-id'])->toBe('wrkspc_b')
+        ->and($headersOf($tenant)['anthropic-beta'])->toBe('compact-2026-09-04')
+        ->and($headersOf($app->get(ClientContract::class))['anthropic-workspace-id'])->toBe('wrkspc_a');
+});

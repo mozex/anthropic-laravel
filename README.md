@@ -67,7 +67,7 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
 });
 ```
 
-**One artisan command to set up.** `php artisan anthropic:install` publishes the config file and adds `ANTHROPIC_API_KEY=` to your `.env`, with the optional `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` lines commented out. You're ready to go.
+**One artisan command to set up.** `php artisan anthropic:install` publishes the config file and adds `ANTHROPIC_API_KEY=` to your `.env`, with the optional variables commented out. You're ready to go.
 
 **Forward-compatible.** Parameters pass through to the API as-is. When Anthropic ships a new feature, it works in your code the same day. No waiting for a package update.
 
@@ -87,7 +87,7 @@ Run the install command:
 php artisan anthropic:install
 ```
 
-This publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to your `.env`, plus two optional settings commented out. Set your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
+This publishes `config/anthropic.php` and adds `ANTHROPIC_API_KEY=` to your `.env`, plus the optional settings, commented out. Set your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...

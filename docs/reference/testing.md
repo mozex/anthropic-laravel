@@ -121,6 +121,18 @@ Anthropic::messages()->assertSent(function (string $method, array $parameters): 
 Anthropic::batches()->assertNotSent();
 ```
 
+### assertSentWithOptions
+
+Code that calls `Anthropic::withOptions([...])` gets a fake sharing the same queue and records, and each request it sends records its options:
+
+```php
+Anthropic::assertSentWithOptions(Messages::class, [
+    'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
+]);
+```
+
+A request with more options than you list still matches.
+
 ## Testing controllers
 
 A full example of a controller test:

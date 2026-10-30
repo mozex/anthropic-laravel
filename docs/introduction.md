@@ -13,7 +13,7 @@ Under the hood, every request is handled by the underlying PHP package, so you g
 
 **One Facade for everything.** `Anthropic::messages()`, `Anthropic::models()`, `Anthropic::batches()`, `Anthropic::files()`, and the deprecated `Anthropic::completions()`. No factory setup, no client instantiation. The service provider handles it.
 
-**Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env` (plus the optional API version and base URL lines, commented out), and you're ready to go.
+**Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env` (plus the optional settings, commented out), and you're ready to go.
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake one, queue responses, and assert exactly which requests were sent. This pairs with Laravel's existing testing idioms (`Event::fake()`, `Queue::fake()`) so your test code stays consistent.
 
@@ -35,7 +35,7 @@ Run the install command:
 php artisan anthropic:install
 ```
 
-This publishes `config/anthropic.php` to your project and adds `ANTHROPIC_API_KEY=` to your `.env` file, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out. Fill in your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
+This publishes `config/anthropic.php` to your project and adds `ANTHROPIC_API_KEY=` to your `.env` file, with the optional settings commented out. Fill in your key from the [Anthropic Console](https://platform.claude.com/settings/keys):
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...

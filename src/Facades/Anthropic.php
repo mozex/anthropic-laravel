@@ -21,6 +21,7 @@ use Throwable;
  * @method static \Anthropic\Resources\Models models()
  * @method static \Anthropic\Resources\Batches batches()
  * @method static \Anthropic\Resources\Files files()
+ * @method static \Anthropic\Contracts\ClientContract withOptions(array<string, mixed> $options)
  */
 class Anthropic extends Facade
 {

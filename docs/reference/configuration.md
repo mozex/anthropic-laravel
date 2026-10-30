@@ -3,7 +3,7 @@ title: Configuration
 weight: 1
 ---
 
-Configuration happens through `config/anthropic.php` and environment variables. Run `php artisan anthropic:install` to publish the config file and add `ANTHROPIC_API_KEY=` to your `.env` and `.env.example`, with `ANTHROPIC_API_VERSION` and `ANTHROPIC_BASE_URL` commented out.
+Configuration happens through `config/anthropic.php` and environment variables. Run `php artisan anthropic:install` to publish the config file and add `ANTHROPIC_API_KEY=` to your `.env` and `.env.example`, with the optional variables below it commented out.
 
 ## Config file
 
@@ -12,7 +12,11 @@ After running the install command, you'll have `config/anthropic.php`:
 ```php
 return [
     'api_key' => env('ANTHROPIC_API_KEY'),
+    'auth_token' => env('ANTHROPIC_AUTH_TOKEN'),
+    'workspace_id' => env('ANTHROPIC_WORKSPACE_ID'),
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
+    'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
+    'headers' => [],
     'beta' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
@@ -22,7 +26,7 @@ return [
 ];
 ```
 
-Five options: the API key, the timeout, a list of Anthropic beta features to opt into, the API version, and a base URL for a proxy or gateway. The last two are empty by default, so the client keeps its own defaults.
+Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
 
 ## Environment variables
 
@@ -34,13 +38,16 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `ANTHROPIC_API_KEY` | None (required) | Your API key from the [Anthropic Console](https://platform.claude.com/settings/keys) |
+| `ANTHROPIC_API_KEY` | None (required without a token) | Your API key from the [Anthropic Console](https://platform.claude.com/settings/keys) |
+| `ANTHROPIC_AUTH_TOKEN` | None | A bearer token, such as a Workload Identity Federation access token, sent as `Authorization: Bearer` when no API key is set |
+| `ANTHROPIC_WORKSPACE_ID` | None | The `anthropic-workspace-id` header, which an API key not scoped to one workspace needs |
 | `ANTHROPIC_REQUEST_TIMEOUT` | `30` | HTTP request timeout in seconds |
+| `ANTHROPIC_CONNECT_TIMEOUT` | None | Seconds to wait while connecting (streamed requests ignore it) |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
 | `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
 
-If `ANTHROPIC_API_KEY` is missing or not a string when the client is resolved, the service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`.
+If neither `ANTHROPIC_API_KEY` nor `ANTHROPIC_AUTH_TOKEN` is set when the client is resolved, the service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The client sends one credential, as the official SDKs do: the key when one is set, the token otherwise. Claude Code and the SDKs read `ANTHROPIC_AUTH_TOKEN` too, so a token exported in the shell that starts artisan or a queue worker reaches the app when its `.env` has no key. `headers` has no environment variable: set it in the config file, as `['X-Gateway-Key' => env('GATEWAY_KEY')]` for example; those headers are applied last.
 
 ## Timeout configuration
 
@@ -58,6 +65,24 @@ You'll want a longer timeout when:
 - Getting non-streamed responses where you want the full message back
 
 For streamed requests, the timeout applies to the initial connection. After that, data flows chunk-by-chunk.
+
+## Per-request options
+
+`Anthropic::withOptions()` returns a client whose requests carry extra settings, leaving the app-wide client as it is. It's the way to run one call in another workspace, add a beta for one feature, or tag requests for your gateway:
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+
+$client = Anthropic::withOptions([
+    'workspace_id' => $team->anthropic_workspace_id,
+    'betas' => ['server-side-fallback-2026-07-01'],
+    'headers' => ['X-Team' => (string) $team->id],
+]);
+
+$response = $client->messages()->create([...]);
+```
+
+The options are `headers`, `query`, `betas`, `api_version`, `workspace_id` and `user_profile_id`; the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration) describes each. Methods that take only an ID, such as `Anthropic::models()->retrieve()`, get their betas this way.
 
 ## API version
 
@@ -85,7 +110,7 @@ A few things to know before you set it:
 
 ## Upgrading an older config file
 
-A `config/anthropic.php` published by an earlier release has neither `api_version` nor `base_url`, and the package doesn't merge its defaults into your file, so the two variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
+A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `headers`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
 
 ## Beta features
 
@@ -203,6 +228,6 @@ public function register(): void
 }
 ```
 
-The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default). For `base_url`, pass `withBaseUri()` the URL with `/v1` added, as the package does. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
 
 Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).

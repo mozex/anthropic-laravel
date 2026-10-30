@@ -168,30 +168,113 @@ it('adds /v1 to the configured base url, as the official SDKs do', function (str
 ]);
 
 it('reads the api version and base url from their environment variables', function () {
-    // env() reads $_SERVER first, so this wins over a value exported in the shell running the tests
-    $values = ['ANTHROPIC_API_VERSION' => '2026-10-21', 'ANTHROPIC_BASE_URL' => 'https://gateway.example.com'];
-    $saved = [];
-
-    foreach ($values as $name => $value) {
-        $saved[$name] = $_SERVER[$name] ?? null;
-        $_SERVER[$name] = $value;
-    }
-
-    try {
-        $config = require __DIR__.'/../config/anthropic.php';
-    } finally {
-        foreach ($saved as $name => $value) {
-            if ($value === null) {
-                unset($_SERVER[$name]);
-            } else {
-                $_SERVER[$name] = $value;
-            }
-        }
-    }
+    $config = configWithEnvironment(['ANTHROPIC_API_VERSION' => '2026-10-21', 'ANTHROPIC_BASE_URL' => 'https://gateway.example.com']);
 
     expect($config)->toMatchArray([
         'api_version' => '2026-10-21',
         'base_url' => 'https://gateway.example.com',
+    ]);
+});
+
+it('sends one credential: the api key when one is set, the auth token otherwise', function (mixed $apiKey, bool $sendsKey) {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => $apiKey,
+            // composed: the authentication docs show no token value
+            'auth_token' => ' sk-ant-oat01-token ',
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $headers = clientHeaders($app->get(Client::class));
+
+    expect(array_key_exists('x-api-key', $headers))->toBe($sendsKey)
+        ->and(array_key_exists('Authorization', $headers))->toBe(! $sendsKey);
+
+    if (! $sendsKey) {
+        expect($headers['Authorization'])->toBe('Bearer sk-ant-oat01-token');
+    }
+})->with([
+    'no key' => [null, false],
+    'an empty key line' => ['', false],
+    'a blank key' => ['  ', false],
+    'a key' => ['test', true],
+]);
+
+it('still requires an api key when the auth token is blank', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['auth_token' => '  '],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $app->get(Client::class);
+})->throws(ApiKeyIsMissing::class);
+
+it('sends the workspace id and the extra headers', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => 'test',
+            'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
+            'beta' => ['files-api-2025-04-14'],
+            // composed: no docs example of gateway headers
+            'headers' => ['X-Tenant' => 'acme', 'X-Org' => 42, 'X-Bad' => ['not', 'a', 'string'], 'anthropic-beta' => 'compact-2026-09-04'],
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $headers = clientHeaders($app->get(Client::class));
+
+    expect($headers['anthropic-workspace-id'])->toBe('wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ')
+        ->and($headers['X-Tenant'])->toBe('acme')
+        ->and($headers['X-Org'])->toBe('42')
+        ->and($headers)->not->toHaveKey('X-Bad')
+        // the headers key is applied last, so it wins over the beta key
+        ->and($headers['anthropic-beta'])->toBe('compact-2026-09-04');
+});
+
+it('sets the connect timeout on the guzzle client', function (mixed $connectTimeout, ?float $expected) {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => [
+            'api_key' => 'test',
+            'request_timeout' => 60,
+            'connect_timeout' => $connectTimeout,
+        ],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $client = $app->get(Client::class);
+    $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
+    $guzzle = (new ReflectionProperty($transporter, 'client'))->getValue($transporter);
+
+    expect($guzzle->getConfig('timeout'))->toBe(60)
+        ->and($guzzle->getConfig('connect_timeout'))->toBe($expected);
+})->with([
+    'a number from .env' => ['5', 5.0],
+    'empty' => [null, null],
+    'not a number' => ['soon', null],
+    'not positive' => ['-1', null],
+]);
+
+it('reads the new keys from their environment variables', function () {
+    $config = configWithEnvironment(['ANTHROPIC_AUTH_TOKEN' => 'sk-ant-oat01-token', 'ANTHROPIC_WORKSPACE_ID' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ', 'ANTHROPIC_CONNECT_TIMEOUT' => '5']);
+
+    expect($config)->toMatchArray([
+        'auth_token' => 'sk-ant-oat01-token',
+        'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
+        'connect_timeout' => '5',
+        'headers' => [],
     ]);
 });
 
@@ -222,4 +305,33 @@ function clientHeaders(Client $client): array
     $array = $headers->toArray();
 
     return $array;
+}
+
+/**
+ * Loads the package's config file with the given environment variables set, then restores them.
+ *
+ * @param  array<string, string>  $values
+ * @return array<string, mixed>
+ */
+function configWithEnvironment(array $values): array
+{
+    // env() reads $_SERVER first, so this wins over a value exported in the shell running the tests
+    $saved = [];
+
+    foreach ($values as $name => $value) {
+        $saved[$name] = $_SERVER[$name] ?? null;
+        $_SERVER[$name] = $value;
+    }
+
+    try {
+        return require __DIR__.'/../config/anthropic.php';
+    } finally {
+        foreach ($saved as $name => $value) {
+            if ($value === null) {
+                unset($_SERVER[$name]);
+            } else {
+                $_SERVER[$name] = $value;
+            }
+        }
+    }
 }

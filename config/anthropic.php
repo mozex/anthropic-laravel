@@ -18,6 +18,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Auth Token
+    |--------------------------------------------------------------------------
+    |
+    | A bearer token sent as `Authorization: Bearer <token>`, such as an access
+    | token from Workload Identity Federation, in place of the API key. It's
+    | used only when no API key is set. Claude Code and the official SDKs read
+    | this name too, so a value exported in the shell that starts artisan, a
+    | queue worker or `php artisan serve` wins over .env.
+    */
+
+    'auth_token' => env('ANTHROPIC_AUTH_TOKEN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Workspace
+    |--------------------------------------------------------------------------
+    |
+    | The ID of the workspace requests run in, sent as the
+    | `anthropic-workspace-id` header. An API key that isn't scoped to one
+    | workspace needs it; leave it empty otherwise.
+    */
+
+    'workspace_id' => env('ANTHROPIC_WORKSPACE_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Request Timeout
     |--------------------------------------------------------------------------
     |
@@ -26,6 +52,30 @@ return [
     */
 
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Connect Timeout
+    |--------------------------------------------------------------------------
+    |
+    | The maximum number of seconds to wait while connecting to the API. Leave
+    | it empty to wait as long as the request timeout allows. Streamed requests
+    | go through Guzzle's stream handler, which ignores it.
+    */
+
+    'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Extra Headers
+    |--------------------------------------------------------------------------
+    |
+    | Headers sent on every request, as name => value pairs, such as the ones
+    | a proxy or gateway in front of the API expects. They're applied last, so
+    | one here wins over a header the other keys set.
+    */
+
+    'headers' => [],
 
     /*
     |--------------------------------------------------------------------------
