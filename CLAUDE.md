@@ -29,8 +29,8 @@ Run tests by name:
 
 Small package with 6 source files in `src/`:
 
-- **`ServiceProvider.php`** — `DeferrableProvider` that registers `ClientContract` as a lazy singleton, aliased to `'anthropic'` and `Client::class`. Auto-discovered via `extra.laravel.providers` in `composer.json`. Publishes `config/anthropic.php`.
-- **`Facades/Anthropic.php`** — Facade resolving `'anthropic'`. Has `fake(array $responses)` for testing (swaps root with `AnthropicFake`).
+- **`ServiceProvider.php`** — `DeferrableProvider` that registers `ClientContract` as a lazy singleton, aliased to `'anthropic'` and `Client::class`. Auto-discovered via `extra.laravel.providers` in `composer.json`. Publishes `config/anthropic.php` under the provider and the `anthropic-config` tag.
+- **`Facades/Anthropic.php`** — Facade resolving `'anthropic'`. Has `fake(array $responses)` for testing: it loads the deferred provider first (in a container that still defers it, `loadDeferredProviders()`, which every `artisan()` call runs, would otherwise bind the real client over the fake), binds the `AnthropicFake` as `ClientContract`, then swaps the root. Code that type-hints `Anthropic\Client` can't take the fake; the docs say to type-hint `ClientContract`.
 - **`Testing/AnthropicFake.php`** — Thin subclass of `Anthropic\Testing\ClientFake`. Provides `assertSent()`, `assertNotSent()`, `assertNothingSent()`.
 - **`Exceptions/ApiKeyIsMissing.php`** — Thrown when `anthropic.api_key` config is missing or not a string.
 - **`Commands/InstallCommand.php`** — `php artisan anthropic:install`. Copies config, appends env vars to `.env`/`.env.example`, then asks for a GitHub star (default yes). Uses Termwind for console output via `Support/View.php`. A run nobody can answer (`--no-interaction`, or no terminal on stdin, as with CI and AI agents) skips the question, takes the default, and prints a note explaining the browser tab. `isInteractive()` treats unit tests as interactive, like Laravel's own prompt rule, so the tests are deterministic. The question uses `$this->confirm()`, not Laravel Prompts: the earlier `callSilent('vendor:publish')` reconfigures Prompts' global output to a `NullOutput`, which would make a Prompts question invisible. The browser opens through the `Process` facade (backgrounded on Linux, where `xdg-open` without a detected desktop runs the browser in the foreground), and any failure prints the URL instead.
@@ -51,11 +51,11 @@ Small package with 6 source files in `src/`:
 
 ## Testing
 
-Tests use **Pest** syntax with `expect()` assertions. Every test file ends in `Test.php`: `phpunit.xml.dist` lists `tests` without a suffix, so PHPUnit's default `Test.php` applies and any other file there is silently skipped (a test in `tests/ArchTest.php` fails on one). `tests/Pest.php` binds nothing: the facade and provider tests build their own container.
+Tests use **Pest** syntax with `expect()` assertions. Every test file ends in `Test.php`: `phpunit.xml.dist` lists `tests` without a suffix, so PHPUnit's default `Test.php` applies and any other file there is silently skipped (a test in `tests/ArchTest.php` fails on one). `tests/Pest.php` binds nothing: the facade and provider tests build their own container. Testbench, like an app's own test case, bootstraps the console kernel, which loads every deferred provider before a test runs, so a test about deferred loading (the fake test after `loadDeferredProviders()`) builds a fresh `Illuminate\Foundation\Application` with `addDeferredServices()` and restores the global container and the facade application afterwards.
 
 Architecture tests in `tests/ArchTest.php` enforce namespace dependency boundaries — each namespace declares which imports are allowed.
 
-`tests/InstallCommandTest.php` runs the install command through Orchestra Testbench (`tests/TestCase.php` registers the provider); it's the only file bound to that TestCase. It fakes `Process`, so no test opens a real browser, and restores the testbench skeleton's `.env.example` afterwards.
+`tests/InstallCommandTest.php` runs the install command, and `vendor:publish` by tag and by provider, through Orchestra Testbench (`tests/TestCase.php` registers the provider); it's the only file bound to that TestCase. It fakes `Process`, so no test opens a real browser, and restores the testbench skeleton's `.env.example` afterwards.
 
 Facade fake pattern:
 ```php

@@ -121,7 +121,7 @@ foreach ($stream as $response) {
 | `content_block_stop` | End of each content block | Block index |
 | `message_delta` | Once, near the end | Stop reason and final usage |
 
-The client handles `message_stop`, `ping`, and mid-stream errors internally. An error mid-stream throws an `ErrorException` (see [Error Handling](../reference/error-handling.md)).
+The client skips `ping` and ends the loop at `message_stop`. Any other event type reaches your loop, including ones the API adds later, so check `$event->type` rather than assuming this table is complete. An error mid-stream throws an `ErrorException` (see [Error Handling](../reference/error-handling.md)).
 
 ---
 

@@ -5,7 +5,7 @@ description: Use when writing Laravel code that calls the Anthropic Claude API t
 
 # Anthropic Laravel
 
-A Laravel wrapper around the `mozex/anthropic-php` SDK. It adds a Facade, a publishable config, an install command, and a `Facade::swap()`-based testing fake. Every real call is handed off to the PHP client, so the response DTOs, content block shapes, and streaming events below come straight from the underlying SDK.
+A Laravel wrapper around the `mozex/anthropic-php` SDK. It adds a Facade, a publishable config, an install command, and a testing fake that replaces the client on the Facade and in the container. Every real call is handed off to the PHP client, so the response DTOs, content block shapes, and streaming events below come straight from the underlying SDK.
 
 ## Quick reference
 
@@ -222,7 +222,7 @@ Anything with extended thinking, code execution, or large context pushes past ty
 
 ## Streaming
 
-`createStreamed()` takes the same shape as `create()` and returns an iterable `StreamResponse`. The client handles `message_stop` and `ping` events internally; your loop sees five event types:
+`createStreamed()` takes the same shape as `create()` and returns an iterable `StreamResponse`. The client skips `ping` and ends the loop at `message_stop`. Your loop sees these five event types, plus any type the API adds later, so always branch on `$event->type`:
 
 - `message_start`: full envelope plus initial usage
 - `content_block_start`: `$event->index`, `$event->content_block_start->type`
@@ -456,7 +456,7 @@ Exception hierarchy:
 ErrorException          (any 4xx/5xx API response)
 └── RateLimitException  (HTTP 429)
 TransporterException    (network, DNS, connection)
-UnserializableResponse  (response wasn't valid JSON)
+UnserializableResponse  (a 2xx response that wasn't valid JSON)
 ApiKeyIsMissing         (Laravel wrapper; config-time)
 ```
 
@@ -478,7 +478,7 @@ try {
 
 ### Queue retry pattern
 
-Release the job on rate limits and 529 overloads instead of throwing. Overload errors are expected during peak and shouldn't page an on-call engineer.
+Release the job on rate limits and 529 overloads instead of throwing. Overload errors are expected during peak and shouldn't page an on-call engineer. Match overloads by `getErrorType()`, never `getStatusCode()`: one that arrives mid-stream carries status 200.
 
 ```php
 class AskClaudeJob implements ShouldQueue {
@@ -492,7 +492,7 @@ class AskClaudeJob implements ShouldQueue {
             $this->release((int) $e->response->getHeaderLine('Retry-After') ?: 60);
             return;
         } catch (ErrorException $e) {
-            if ($e->getStatusCode() === 529) { $this->release(30); return; }
+            if ($e->getErrorType() === 'overloaded_error') { $this->release(30); return; }
             throw $e;
         }
     }
@@ -506,12 +506,12 @@ Drop specific errors from the error tracker via `bootstrap/app.php`:
 ```php
 ->withExceptions(function (Exceptions $exceptions) {
     $exceptions->reportable(function (\Anthropic\Exceptions\ErrorException $e) {
-        if ($e->getStatusCode() === 529) return false;
+        if ($e->getErrorType() === 'overloaded_error') return false;
     });
 })
 ```
 
-Returning `false` stops default reporting. Returning nothing falls through. Extend for any status you want quiet.
+Returning `false` stops default reporting. Returning nothing falls through. Extend for any error type you want quiet.
 
 For the full HTTP status code table and the underlying transport details, fetch `/mozex/anthropic-laravel` or `/mozex/anthropic-php` via Context7 or the docs site.
 
@@ -542,7 +542,7 @@ Include `requestId` in log context on every response; it's what Anthropic suppor
 
 ## Testing
 
-`Anthropic::fake()` swaps the real client via `Facade::swap()`. Everything resolved through the Facade or container picks up the fake.
+`Anthropic::fake()` replaces the client on the Facade and binds the fake as `Anthropic\Contracts\ClientContract`, so constructor-injected code picks it up too. Type-hint `ClientContract`, never `Anthropic\Client`: the fake isn't a `Client`, so resolving a dependency typed with the class after `fake()` throws a `TypeError`.
 
 ```php
 use Anthropic\Laravel\Facades\Anthropic;
@@ -560,7 +560,7 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
 });
 ```
 
-Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent. Pass `ErrorException` instances as fakes to test error branches. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
+Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass `ErrorException` instances as fakes to test error branches. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
 
 Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertNotSent`, `assertNothingSent`. Also resource-level: `Anthropic::messages()->assertSent(...)`.
 

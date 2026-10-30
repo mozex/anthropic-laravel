@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+use Anthropic\Client;
+use Anthropic\Contracts\ClientContract;
+use Anthropic\Exceptions\ErrorException;
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
@@ -15,8 +18,17 @@ use Anthropic\Responses\Files\DeletedFileResponse;
 use Anthropic\Responses\Files\FileResponse;
 use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
 use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
+use GuzzleHttp\Psr7\Utils;
 use Illuminate\Config\Repository;
+use Illuminate\Container\Container;
+use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\Facade;
 use PHPUnit\Framework\ExpectationFailedException;
+
+class ClaudeGreeter
+{
+    public function __construct(public ClientContract $client) {}
+}
 
 it('resolves resources', function () {
     $app = app();
@@ -344,4 +356,49 @@ test('fake files can assert a request was sent', function () {
         return $method === 'delete' &&
             $id === 'file_011CNha8iCJcU1wXNR6q4V8w';
     });
+});
+
+// Container
+
+test('fake reaches code that type-hints the client contract, before and after the deferred providers load', function () {
+    $container = Container::getInstance();
+    $facadeApplication = Facade::getFacadeApplication();
+
+    try {
+        // A fresh app that defers the provider, as a real one does. No API key: the real client can't be built.
+        $app = new Application(dirname(__DIR__, 2));
+        $app->instance('config', new Repository([]));
+        $app->addDeferredServices([
+            Client::class => ServiceProvider::class,
+            ClientContract::class => ServiceProvider::class,
+            'anthropic' => ServiceProvider::class,
+        ]);
+
+        Facade::clearResolvedInstances();
+        Facade::setFacadeApplication($app);
+
+        $fake = Anthropic::fake();
+
+        expect($app->make(ClaudeGreeter::class)->client)->toBe($fake);
+
+        $app->loadDeferredProviders();
+
+        expect($app->make(ClaudeGreeter::class)->client)->toBe($fake)
+            ->and(Anthropic::getFacadeRoot())->toBe($fake);
+    } finally {
+        Container::setInstance($container);
+        Facade::clearResolvedInstances();
+        Facade::setFacadeApplication($facadeApplication);
+    }
+});
+
+test('fake accepts exceptions and streams as responses', function () {
+    Anthropic::fake([
+        new ErrorException(['type' => 'overloaded_error', 'message' => 'Overloaded'], 529),
+        Utils::streamFor('file bytes'),
+    ]);
+
+    expect(fn () => Anthropic::messages()->create(['model' => 'claude-haiku-4-5']))
+        ->toThrow(ErrorException::class, 'Overloaded')
+        ->and(Anthropic::files()->download('file_011CNha8iCJcU1wXNR6q4V8w'))->toBe('file bytes');
 });

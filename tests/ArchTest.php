@@ -17,7 +17,9 @@ arch('exceptions')
 arch('facades')
     ->expect('Anthropic\Laravel\Facades\Anthropic')
     ->toOnlyUse([
+        'Illuminate\Foundation\Application',
         'Illuminate\Support\Facades\Facade',
+        'Anthropic\Contracts\ClientContract',
         'Anthropic\Contracts\ResponseContract',
         'Anthropic\Contracts\ResponseStreamContract',
         'Anthropic\Laravel\Testing\AnthropicFake',

@@ -61,7 +61,7 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/anthropic.php' => config_path('anthropic.php'),
-            ]);
+            ], 'anthropic-config');
 
             $this->commands([
                 InstallCommand::class,

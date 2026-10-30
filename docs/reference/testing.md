@@ -30,7 +30,18 @@ $response = Anthropic::messages()->create([
 expect($response->content[0]->text)->toBe('Hello! How can I help?');
 ```
 
-`Anthropic::fake()` swaps the real client in the container via `Facade::swap()`, so any code that uses the Facade (or resolves from the container) gets the fake.
+`Anthropic::fake()` replaces the real client on the Facade and in the container, so code that uses the Facade, or has `Anthropic\Contracts\ClientContract` injected, gets the fake:
+
+```php
+use Anthropic\Contracts\ClientContract;
+
+class SummarizeArticle
+{
+    public function __construct(private ClientContract $client) {}
+}
+```
+
+Type-hint `ClientContract` rather than `Anthropic\Client`. The fake isn't a `Client`, so resolving a dependency typed with the class after `Anthropic::fake()` throws a `TypeError`.
 
 ## Available fake responses
 

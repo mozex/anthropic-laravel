@@ -146,7 +146,7 @@ If you change the API key or timeout, run `php artisan config:clear` to pick up 
 The install command publishes the config as part of its flow. If you need to publish it again (e.g., after an update), run:
 
 ```bash
-php artisan vendor:publish --tag=config --provider="Anthropic\Laravel\ServiceProvider"
+php artisan vendor:publish --tag=anthropic-config
 ```
 
 ## Using a custom HTTP client

@@ -76,7 +76,7 @@ class AskClaudeJob implements ShouldQueue
             $this->release((int) $e->response->getHeaderLine('Retry-After') ?: 60);
             return;
         } catch (ErrorException $e) {
-            if ($e->getStatusCode() === 529) {
+            if ($e->getErrorType() === 'overloaded_error') {
                 $this->release(30);
                 return;
             }
@@ -89,7 +89,7 @@ class AskClaudeJob implements ShouldQueue
 }
 ```
 
-Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker.
+Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Check the error type, not the status code: an overload that arrives in the middle of a stream comes with status 200.
 
 ## Transport errors
 
@@ -127,7 +127,7 @@ This is a config-time error. Usually you'll catch it once during deployment, not
 ErrorException (API errors)
 ├── RateLimitException (HTTP 429)
 TransporterException (HTTP client/network errors)
-UnserializableResponse (JSON decode failures)
+UnserializableResponse (a 2xx response that isn't valid JSON)
 ApiKeyIsMissing (config-time error)
 ```
 
@@ -139,14 +139,14 @@ use Anthropic\Exceptions\ErrorException;
 
 ->withExceptions(function (Exceptions $exceptions) {
     $exceptions->reportable(function (ErrorException $e) {
-        if ($e->getStatusCode() === 529) {
+        if ($e->getErrorType() === 'overloaded_error') {
             return false;
         }
     });
 })
 ```
 
-Returning `false` from a `reportable` callback tells Laravel to stop the default reporting for that exception. Return nothing (or `null`) and it falls through to the normal reporting chain. Extend this pattern for any other status codes you want to handle quietly.
+Returning `false` from a `reportable` callback tells Laravel to stop the default reporting for that exception. Return nothing (or `null`) and it falls through to the normal reporting chain. Extend this pattern for any other error types you want to handle quietly.
 
 ---
 

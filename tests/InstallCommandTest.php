@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Anthropic\Laravel\ServiceProvider;
 use Illuminate\Process\PendingProcess;
 use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
@@ -82,6 +83,20 @@ it('opens the repository with a note instead of asking when nobody can answer', 
         ->assertSuccessful();
 
     assertOpenedRepository();
+
+    expect(config_path('anthropic.php'))->toBeFile();
+});
+
+it('publishes the config with the documented vendor:publish command', function () {
+    $this->artisan('vendor:publish', ['--tag' => 'anthropic-config'])
+        ->assertSuccessful();
+
+    expect(config_path('anthropic.php'))->toBeFile();
+});
+
+it('still publishes the config by provider', function () {
+    $this->artisan('vendor:publish', ['--provider' => ServiceProvider::class])
+        ->assertSuccessful();
 
     expect(config_path('anthropic.php'))->toBeFile();
 });
