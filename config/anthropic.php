@@ -127,13 +127,37 @@ return [
     | `laravel_events` also dispatches Laravel's own HTTP client events
     | (ResponseReceived, ConnectionFailed), which Telescope records; other
     | listeners of those events see the calls too, so it's off by default.
+    |
+    | `telescope` records each call in Telescope itself, tagged with the
+    | model and the request ID. Turn on this or `laravel_events`, not both,
+    | or every call shows up twice.
+    |
+    | `nightwatch` attaches Nightwatch's Guzzle middleware when Nightwatch is
+    | installed and `laravel_client` is off (Nightwatch already records
+    | Laravel's client). Set it to false to leave the calls out.
     */
 
     'http' => [
         'middleware' => [],
         'laravel_client' => (bool) env('ANTHROPIC_HTTP_LARAVEL_CLIENT', false),
         'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
+        'telescope' => (bool) env('ANTHROPIC_HTTP_TELESCOPE', false),
+        'nightwatch' => (bool) env('ANTHROPIC_HTTP_NIGHTWATCH', true),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Context
+    |--------------------------------------------------------------------------
+    |
+    | Adds each answer's request ID (`anthropic_request_ids`) and a
+    | non-streamed answer's token counts (`anthropic_input_tokens`,
+    | `anthropic_output_tokens`) to Laravel's Context, so every log line and
+    | queued job after a call carries them. It changes your log output, so
+    | it's off by default.
+    */
+
+    'context' => (bool) env('ANTHROPIC_CONTEXT', false),
 
     /*
     |--------------------------------------------------------------------------

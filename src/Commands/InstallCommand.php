@@ -36,6 +36,9 @@ class InstallCommand extends Command
         'ANTHROPIC_FALLBACK_MODELS' => '# ANTHROPIC_FALLBACK_MODELS=',
         'ANTHROPIC_HTTP_LARAVEL_CLIENT' => '# ANTHROPIC_HTTP_LARAVEL_CLIENT=',
         'ANTHROPIC_HTTP_LARAVEL_EVENTS' => '# ANTHROPIC_HTTP_LARAVEL_EVENTS=',
+        'ANTHROPIC_HTTP_TELESCOPE' => '# ANTHROPIC_HTTP_TELESCOPE=',
+        'ANTHROPIC_HTTP_NIGHTWATCH' => '# ANTHROPIC_HTTP_NIGHTWATCH=',
+        'ANTHROPIC_CONTEXT' => '# ANTHROPIC_CONTEXT=',
     ];
 
     protected $signature = 'anthropic:install';
@@ -140,7 +143,8 @@ class InstallCommand extends Command
 
     /**
      * The provider merges no defaults, so a key added to the package's config
-     * after the app published its copy stays unset until the user adds it.
+     * after the app published its copy stays unset until the user adds it,
+     * one of `http`'s switches included.
      *
      * @return list<array-key>
      */
@@ -153,7 +157,16 @@ class InstallCommand extends Command
             return [];
         }
 
-        return array_keys(array_diff_key($current, $published));
+        $missing = array_keys(array_diff_key($current, $published));
+
+        // `http` gains switches of its own, which a file published earlier lacks inside the array it has.
+        if (is_array($current['http'] ?? null) && is_array($published['http'] ?? null)) {
+            foreach (array_keys(array_diff_key($current['http'], $published['http'])) as $key) {
+                $missing[] = 'http.'.$key;
+            }
+        }
+
+        return $missing;
     }
 
     /**

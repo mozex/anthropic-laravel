@@ -1,14 +1,8 @@
 # Upgrading
 
-## To 1.11.0
+## To 1.12.0
 
-This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw subclasses of `ErrorException`, such as `OverloadedException` for a 529. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`). Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1110) as well.
-
-### The Models lifecycle Filter Now Applies
-
-**Likelihood Of Impact: Low**
-
-A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired']])`, used to go out in a form the API accepts and ignores, so the filter did nothing. It's now sent as `lifecycle[]=retired`, and the results follow it.
+This release requires `mozex/anthropic-php` 1.12. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1120) as well.
 
 ### A Connection Manager Behind The Facade
 
@@ -19,6 +13,34 @@ A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired'
 A new eager provider, `Anthropic\Laravel\AnthropicServiceProvider`, is auto-discovered. An app that lists its providers by hand (with `dont-discover`) adds it beside `Anthropic\Laravel\ServiceProvider`.
 
 The config gains `connections` and `middleware`; `php artisan anthropic:install` names them when an older published file lacks them. An app with only laravel/ai's Anthropic key configured now gets a working client from it.
+
+### Config Values Of The Wrong Type Throw
+
+**Likelihood Of Impact: Low**
+
+A `max_retries` that isn't a whole number of 0 or more (`ANTHROPIC_MAX_RETRIES=many`), or a header value in `headers` that isn't a string, number or boolean, used to be skipped. It now throws `Anthropic\Exceptions\InvalidArgumentException` when the client is built, naming the key. A `beta` entry that isn't a string is still skipped.
+
+### Nightwatch Records The Calls
+
+**Likelihood Of Impact: Low**
+
+With Laravel Nightwatch installed and enabled, its Guzzle middleware is now attached to the client, so the API calls show up in Nightwatch as outgoing requests. Set `ANTHROPIC_HTTP_NIGHTWATCH=false` to leave them out; a `config/anthropic.php` published earlier needs `'nightwatch' => (bool) env('ANTHROPIC_HTTP_NIGHTWATCH', true)` in its `http` array first.
+
+### New Config Keys
+
+**Likelihood Of Impact: Low**
+
+The config gains `context` (`ANTHROPIC_CONTEXT`), which adds each answer's request ID and token counts to Laravel's Context, and two `http` switches: `telescope` (`ANTHROPIC_HTTP_TELESCOPE`), which records each call in Telescope with tags, and `nightwatch` (`ANTHROPIC_HTTP_NIGHTWATCH`, on by default). A published `http` array lacks the two switches, so add them to it. `php artisan anthropic:install` names the keys an older published file lacks, `http.telescope` and `http.nightwatch` included, and adds the `.env` lines, commented out.
+
+## To 1.11.0
+
+This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw subclasses of `ErrorException`, such as `OverloadedException` for a 529. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`). Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1110) as well.
+
+### The Models lifecycle Filter Now Applies
+
+**Likelihood Of Impact: Low**
+
+A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired']])`, used to go out in a form the API accepts and ignores, so the filter did nothing. It's now sent as `lifecycle[]=retired`, and the results follow it.
 
 ### Events For Every Request
 

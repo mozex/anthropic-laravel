@@ -39,7 +39,9 @@
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
+        "laravel/nightwatch": "^1.30.6",
         "laravel/pint": "^1.22.0",
+        "laravel/telescope": "^5.26.0",
         "orchestra/testbench": "^10.0|^11.0",
         "pestphp/pest": "^3.8.2|^4.0.0|^5.0.0",
         "pestphp/pest-plugin-laravel": "^3.2|^4.0.0|^5.0.1",
@@ -49,6 +51,10 @@
         "phpstan/phpstan-deprecation-rules": "^2.0",
         "phpstan/phpstan-phpunit": "^2.0",
         "symfony/var-dumper": "^7.2.6"
+    },
+    "suggest": {
+        "laravel/nightwatch": "Records the client's requests as outgoing requests, attached on its own (http.nightwatch)",
+        "laravel/telescope": "Records each request as a tagged client request entry (http.telescope)"
     },
     "autoload": {
         "psr-4": {

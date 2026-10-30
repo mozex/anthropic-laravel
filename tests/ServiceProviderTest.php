@@ -292,7 +292,7 @@ it('reads the new keys from their environment variables', function () {
         'connect_timeout' => '5',
         'max_retries' => '2',
         'fallback_models' => ['claude-opus-5', 'claude-opus-4-8'],
-        'http' => ['middleware' => [], 'laravel_client' => true, 'laravel_events' => false],
+        'http' => ['middleware' => [], 'laravel_client' => true, 'laravel_events' => false, 'telescope' => false, 'nightwatch' => true],
         'headers' => [],
     ]);
 });

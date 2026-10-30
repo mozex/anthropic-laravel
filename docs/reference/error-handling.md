@@ -125,6 +125,18 @@ use Illuminate\Foundation\Configuration\Exceptions;
 })
 ```
 
+## Logs and error trackers
+
+Every API exception has a `context()` method. Laravel's exception handler adds it to the log entry of each reported exception, and Sentry and Flare attach it too, so a logged API error carries its request ID with nothing to set up:
+
+```php
+$e->context();
+// ['anthropic_request_id' => 'req_018EeWyXxfu5pfWkrYcMdjWG', 'status' => 429, 'type' => 'rate_limit_error',
+//  'error_code' => 'enforced_spend_limit_reached']
+```
+
+It leaves out what the error doesn't carry (a rate limit adds `retry_after`, the spend cap above has none), and holds only those values, never the message, the other headers or a body. Anthropic support asks for the request ID when you report a problem. To find the IDs of the calls that succeeded before an error, turn on [Context](./configuration.md#context).
+
 ## Transport errors
 
 Network failures throw `TransporterException`. A failed connection (DNS, refused or dropped) throws its subclass `ConnectionException`, and a timeout throws `TimeoutException`, which extends `ConnectionException`:

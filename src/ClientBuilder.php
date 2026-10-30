@@ -7,14 +7,19 @@ namespace Anthropic\Laravel;
 use Anthropic\Client;
 use Anthropic\Factory;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic\Laravel\Middleware\AddsToContext;
 use Anthropic\Laravel\Middleware\DispatchesEvents;
+use Anthropic\Laravel\Middleware\RecordsInTelescope;
 use Anthropic\Middleware\RefusalFallbackMiddleware;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\HandlerStack;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Log\Context\Repository as Context;
 use InvalidArgumentException;
+use Laravel\Nightwatch\Core as Nightwatch;
+use Laravel\Telescope\Telescope;
 use Psr\Http\Message\RequestInterface;
 
 /**
@@ -91,7 +96,8 @@ class ClientBuilder
 
     /**
      * The client's middleware: the refusal fallback, then the events (so each fallback attempt is an event of its
-     * own), then the connection's own `middleware`, class names the container resolves or callables.
+     * own), Context (with `context`) and Telescope (with `http.telescope`), then the connection's own `middleware`,
+     * class names the container resolves or callables.
      *
      * @param  array<array-key, mixed>  $config
      * @return list<callable>
@@ -116,9 +122,19 @@ class ClientBuilder
             $middleware[] = new RefusalFallbackMiddleware($fallbackModels);
         }
 
+        $http = is_array($config['http'] ?? null) ? $config['http'] : [];
+
         if ($app->bound(Dispatcher::class)) {
-            $http = is_array($config['http'] ?? null) ? $config['http'] : [];
             $middleware[] = new DispatchesEvents(static fn (): Dispatcher => $app->make(Dispatcher::class), $connection, ($http['laravel_events'] ?? null) === true);
+        }
+
+        // Inside the fallback, like the events, so each attempt and each fallback hop is recorded on its own.
+        if (($config['context'] ?? null) === true) {
+            $middleware[] = new AddsToContext(static fn (): Context => $app->make(Context::class));
+        }
+
+        if (($http['telescope'] ?? null) === true && class_exists(Telescope::class)) {
+            $middleware[] = new RecordsInTelescope;
         }
 
         return [
@@ -142,13 +158,27 @@ class ClientBuilder
         }
 
         $http = is_array($config['http'] ?? null) ? $config['http'] : [];
+        $laravelClient = ($http['laravel_client'] ?? null) === true;
         $stack = HandlerStack::create();
 
         foreach (self::resolveMiddleware($app, $http['middleware'] ?? [], 'Each anthropic.http.middleware entry must be a Guzzle middleware: an invokable class name or a callable.') as $middleware) {
             $stack->push($middleware);
         }
 
-        if (($http['laravel_client'] ?? null) === true) {
+        // Nightwatch records Laravel's HTTP client through its global middleware, which laravel_client already runs,
+        // so it's attached here only without it. Its Core is bound once its provider is registered, enabled or not.
+        // Resolved on each attempt, as Laravel's own client does: Guzzle keeps the stack it resolved, and Nightwatch
+        // decides there whether it's paused by Nightwatch::ignore().
+        if (! $laravelClient && ($http['nightwatch'] ?? true) !== false && class_exists(Nightwatch::class)
+            && $app->bound(Nightwatch::class) && config('nightwatch.enabled', true) !== false) {
+            $stack->unshift(static fn (callable $handler): callable => static function (RequestInterface $request, array $options) use ($app, $handler) {
+                $wrapped = $app->make(Nightwatch::class)->guzzleMiddleware()($handler);
+
+                return is_callable($wrapped) ? $wrapped($request, $options) : $handler($request, $options);
+            });
+        }
+
+        if ($laravelClient) {
             // Innermost, and built on each attempt from the HTTP factory of that moment, so an Http::fake() or
             // Http::preventStrayRequests() set after the client was built still applies, and the app's own
             // middleware runs before the fake answers. Laravel's own events come from DispatchesEvents, in pairs.

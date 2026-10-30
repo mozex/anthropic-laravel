@@ -44,6 +44,10 @@ arch('middleware')
         'Anthropic\Responses\Meta\MetaInformation',
         'Illuminate\Contracts\Events\Dispatcher',
         'Illuminate\Http\Client',
+        'Illuminate\Log\Context\Repository',
+        'Illuminate\Support\Arr',
+        'Laravel\Telescope\IncomingEntry',
+        'Laravel\Telescope\Telescope',
         'Psr\Http\Message',
     ]);
 
@@ -87,7 +91,10 @@ arch('the client builder')
         'Illuminate\Contracts\Container\Container',
         'Illuminate\Contracts\Events\Dispatcher',
         'Illuminate\Http\Client\Factory',
+        'Illuminate\Log\Context\Repository',
         'InvalidArgumentException',
+        'Laravel\Nightwatch\Core',
+        'Laravel\Telescope\Telescope',
         'Psr\Http\Message\RequestInterface',
 
         // helpers...

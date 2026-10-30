@@ -26,7 +26,10 @@ return [
         'middleware' => [],
         'laravel_client' => (bool) env('ANTHROPIC_HTTP_LARAVEL_CLIENT', false),
         'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
+        'telescope' => (bool) env('ANTHROPIC_HTTP_TELESCOPE', false),
+        'nightwatch' => (bool) env('ANTHROPIC_HTTP_NIGHTWATCH', true),
     ],
+    'context' => (bool) env('ANTHROPIC_CONTEXT', false),
     'headers' => [],
     'connections' => [],
     'beta' => array_values(array_filter(array_map(
@@ -38,7 +41,7 @@ return [
 ];
 ```
 
-Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, retries, refusal fallback models, Guzzle middleware, Laravel's HTTP client and its events, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
+Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, retries, refusal fallback models, Guzzle middleware, Laravel's HTTP client and its events, Telescope and Nightwatch recording, Laravel's Context, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
 
 ## Environment variables
 
@@ -59,6 +62,9 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 | `ANTHROPIC_FALLBACK_MODELS` | None | Comma-separated models a refused request is sent to, in order (see [Messages](../usage/messages.md#falling-back-to-another-model)) |
 | `ANTHROPIC_HTTP_LARAVEL_CLIENT` | `false` | Send through Laravel's HTTP client, so `Http::fake()` sees the calls |
 | `ANTHROPIC_HTTP_LARAVEL_EVENTS` | `false` | Also dispatch Laravel's HTTP client events, which Telescope records |
+| `ANTHROPIC_HTTP_TELESCOPE` | `false` | Record each call in Telescope, tagged with the model and the request ID |
+| `ANTHROPIC_HTTP_NIGHTWATCH` | `true` | Attach Nightwatch's middleware when Nightwatch is installed |
+| `ANTHROPIC_CONTEXT` | `false` | Add each answer's request ID and token counts to Laravel's Context |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
 | `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
@@ -123,7 +129,7 @@ Guzzle middleware sees every attempt, retries included.
 
 ## Events
 
-Every HTTP attempt dispatches events in `Anthropic\Laravel\Events`: `RequestSending`, then `ResponseReceived` with the status, the decoded body, the `usage`, the rate-limit `meta` and `durationMs`. A failure dispatches `RequestFailed` (an error status, or a connection failure with a null status), and a 429 also dispatches `RateLimited`, whose `errorCode` is `enforced_spend_limit_reached` for the monthly spend cap. Every value is a scalar or an array, so a queued listener can take them, and no header that holds a credential (the key, a token, a gateway key) is in them. Register listeners in a service provider's `boot()`:
+Every HTTP attempt dispatches events in `Anthropic\Laravel\Events`: `RequestSending`, then `ResponseReceived` with the status, the decoded body, the `usage`, the rate-limit `meta` and `durationMs`. A failure dispatches `RequestFailed` (an error status, or a connection failure with a null status), and a 429 also dispatches `RateLimited`, whose `errorCode` is `enforced_spend_limit_reached` for the monthly spend cap. Every value is a scalar or an array, so a queued listener can take them, and no credential is in them: no header that holds one (the key, a token, a gateway key), and no MCP server's `authorization_token` from the body. Register listeners in a service provider's `boot()`:
 
 ```php
 use Anthropic\Laravel\Events\ResponseReceived;
@@ -153,7 +159,58 @@ ANTHROPIC_HTTP_LARAVEL_EVENTS=true
 
 With `laravel_client` on, `Http::fake()` answers the requests, `Http::assertSent()` sees them and `Http::preventStrayRequests()` applies, whenever they're set; an app's own catch-all `Http::fake()` then catches them too. With `laravel_events` on, each attempt also dispatches Laravel's `RequestSending`, then `ResponseReceived` or `ConnectionFailed`, always as a pair, which Telescope and Sentry record as outgoing requests; the credential headers are taken out first. A streamed answer gets them too, as with Laravel's own client, so a listener that reads its body drains the stream.
 
+Telescope can also record the calls itself, tagged so you can filter them. With `ANTHROPIC_HTTP_TELESCOPE=true`, each attempt becomes a client request entry tagged `anthropic`, `model:claude-opus-5-5` and `req:req_018EeWyXxfu5pfWkrYcMdjWG`. Credentials are taken out, and Telescope's own `hideRequestHeaders()` and hidden parameters apply. Turn on this or `laravel_events`, not both, or every call shows up twice. Telescope stores the bodies, so your prompts land in its database. The options of Telescope's own client request watcher, such as `ignore_hosts`, don't apply to these entries.
+
+With Laravel Nightwatch installed, its Guzzle middleware is attached on its own, so the calls appear in Nightwatch as outgoing requests. It stays off while `laravel_client` is on, because Nightwatch already records Laravel's HTTP client. Set `ANTHROPIC_HTTP_NIGHTWATCH=false` to leave the calls out; with `NIGHTWATCH_ENABLED=false` nothing is attached. A streamed call's duration there is the time to its headers, not to the end of the answer. Nightwatch keeps the URL's query string, so a gateway key passed there needs `Nightwatch::redactOutgoingRequests()`.
+
 For OpenTelemetry spans with the GenAI attributes, add the client's `OpenTelemetryMiddleware` to `middleware` (see [Client middleware](#client-middleware) and the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration#opentelemetry)).
+
+## Context
+
+With `ANTHROPIC_CONTEXT=true`, every answer adds its request ID to Laravel's [Context](https://laravel.com/docs/13.x/context), and a non-streamed answer adds its token counts:
+
+```php
+use Illuminate\Support\Facades\Context;
+
+Context::get('anthropic_request_ids');   // ['req_018EeWyXxfu5pfWkrYcMdjWG']
+Context::get('anthropic_input_tokens');  // 10
+Context::get('anthropic_output_tokens'); // 20
+```
+
+Context goes into every log line written after the call and travels with the jobs you dispatch, so a user's complaint leads you to the request IDs Anthropic support asks for. It changes your log output, so it's off by default. Each retry and fallback hop adds its own ID, and an error answer adds its ID too. The list keeps the last 20 IDs, so a job that makes thousands of calls doesn't grow its log lines without end. The token counts are the `input_tokens` and `output_tokens` of non-streamed Messages answers, cache tokens apart; a streamed answer adds none.
+
+### Replying in the user's language
+
+The client never changes a request on its own, so a reply in the user's language is a line in your `system` prompt. To keep the locale in queued jobs, carry it through Context, as Laravel's docs do:
+
+```php
+// AppServiceProvider::boot()
+use Illuminate\Log\Context\Repository;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Context;
+
+Context::dehydrating(function (Repository $context) {
+    $context->addHidden('locale', Config::get('app.locale'));
+});
+
+Context::hydrated(function (Repository $context) {
+    if ($context->hasHidden('locale')) {
+        Config::set('app.locale', $context->getHidden('locale'));
+    }
+});
+```
+
+```php
+// in the job
+$response = Anthropic::messages()->create([
+    'model' => 'claude-sonnet-5-5',
+    'max_tokens' => 1024,
+    'system' => 'Reply in '.locale_get_display_language(app()->getLocale(), 'en').'.',
+    'messages' => [['role' => 'user', 'content' => $question]],
+]);
+```
+
+`locale_get_display_language()` comes from PHP's `intl` extension.
 
 ## Connections
 
@@ -246,7 +303,7 @@ A few things to know before you set it:
 
 ## Upgrading an older config file
 
-A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `middleware`, `fallback_models`, `http`, `headers`, `connections`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
+A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `middleware`, `fallback_models`, `http` and its `telescope` and `nightwatch` switches, `context`, `headers`, `connections`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
 
 ## Beta features
 
@@ -363,6 +420,6 @@ public function register(): void
 }
 ```
 
-The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))`, your `middleware` entries through `withMiddleware()` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys, and `withMiddleware(new \Anthropic\Laravel\Middleware\DispatchesEvents(fn () => app('events')))` to keep the events. For `laravel_client`, give your Guzzle client `'handler' => Http::buildHandlerStack()`, which fixes the fakes at the moment it's built. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so the package still needs a key or token (its own, or laravel/ai's), or `ApiKeyIsMissing` is thrown before your closure runs. The replacement is the default connection only: named connections and `withApiKey()` still build the package's own client.
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))`, your `middleware` entries through `withMiddleware()` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys, and `withMiddleware(new \Anthropic\Laravel\Middleware\DispatchesEvents(fn () => app('events')))` to keep the events, `new \Anthropic\Laravel\Middleware\AddsToContext(fn () => app(\Illuminate\Log\Context\Repository::class))` to keep Context and `new \Anthropic\Laravel\Middleware\RecordsInTelescope` to keep the Telescope entries. Push `app(\Laravel\Nightwatch\Core::class)->guzzleMiddleware()` onto your Guzzle stack to keep Nightwatch. For `laravel_client`, give your Guzzle client `'handler' => Http::buildHandlerStack()`, which fixes the fakes at the moment it's built. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so the package still needs a key or token (its own, or laravel/ai's), or `ApiKeyIsMissing` is thrown before your closure runs. The replacement is the default connection only: named connections and `withApiKey()` still build the package's own client.
 
 Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).
