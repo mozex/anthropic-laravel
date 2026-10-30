@@ -23,6 +23,8 @@ return [
     ))),
     'http' => [
         'middleware' => [],
+        'laravel_client' => (bool) env('ANTHROPIC_HTTP_LARAVEL_CLIENT', false),
+        'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
     ],
     'headers' => [],
     'beta' => array_values(array_filter(array_map(
@@ -34,7 +36,7 @@ return [
 ];
 ```
 
-Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, retries, refusal fallback models, Guzzle middleware, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
+Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, retries, refusal fallback models, Guzzle middleware, Laravel's HTTP client and its events, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
 
 ## Environment variables
 
@@ -53,6 +55,8 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 | `ANTHROPIC_CONNECT_TIMEOUT` | None | Seconds to wait while connecting (streamed requests ignore it) |
 | `ANTHROPIC_MAX_RETRIES` | `0` | How many times a failed request is sent again |
 | `ANTHROPIC_FALLBACK_MODELS` | None | Comma-separated models a refused request is sent to, in order (see [Messages](../usage/messages.md#falling-back-to-another-model)) |
+| `ANTHROPIC_HTTP_LARAVEL_CLIENT` | `false` | Send through Laravel's HTTP client, so `Http::fake()` sees the calls |
+| `ANTHROPIC_HTTP_LARAVEL_EVENTS` | `false` | Also dispatch Laravel's HTTP client events, which Telescope records |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
 | `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
@@ -114,6 +118,40 @@ class TagRequests
 ```
 
 Guzzle middleware sees every attempt, retries included.
+
+## Events
+
+Every HTTP attempt dispatches events in `Anthropic\Laravel\Events`: `RequestSending`, then `ResponseReceived` with the status, the decoded body, the `usage`, the rate-limit `meta` and `durationMs`. A failure dispatches `RequestFailed` (an error status, or a connection failure with a null status), and a 429 also dispatches `RateLimited`, whose `errorCode` is `enforced_spend_limit_reached` for the monthly spend cap. Every value is a scalar or an array, so a queued listener can take them, and no header that holds a credential (the key, a token, a gateway key) is in them. Register listeners in a service provider's `boot()`:
+
+```php
+use Anthropic\Laravel\Events\ResponseReceived;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
+
+Event::listen(function (ResponseReceived $event) {
+    if ($event->usage !== null) {
+        Log::info('Claude call', [
+            'tokens' => $event->usage['input_tokens'] + $event->usage['output_tokens'],
+            'ms' => $event->durationMs,
+        ]);
+    }
+});
+```
+
+A retried request dispatches its events once per attempt, and so does each fallback attempt. A streamed answer's `ResponseReceived` has no body or usage, since its events are still to be read, and only JSON bodies are decoded, never an upload. A failure without an answer has the `errorType` `connection_error`, `client_timeout_error` or `transport_error`. A listener that throws fails the call, even one that already went through, so keep listeners small or queued. `Anthropic::fake()` sends nothing, so it dispatches nothing; `Event::fake()` sees the events whenever it's set.
+
+## Laravel's HTTP client and Telescope
+
+Two switches put the calls where Laravel's own tools see them. Both are off by default, because they also put the calls in front of code that wasn't watching for them:
+
+```env
+ANTHROPIC_HTTP_LARAVEL_CLIENT=true
+ANTHROPIC_HTTP_LARAVEL_EVENTS=true
+```
+
+With `laravel_client` on, `Http::fake()` answers the requests, `Http::assertSent()` sees them and `Http::preventStrayRequests()` applies, whenever they're set; an app's own catch-all `Http::fake()` then catches them too. With `laravel_events` on, each attempt also dispatches Laravel's `RequestSending`, then `ResponseReceived` or `ConnectionFailed`, always as a pair, which Telescope and Sentry record as outgoing requests; the credential headers are taken out first. A streamed answer gets them too, as with Laravel's own client, so a listener that reads its body drains the stream.
+
+For OpenTelemetry spans with the GenAI attributes, the client's `OpenTelemetryMiddleware` goes on a client you build with the factory (see [Using a custom HTTP client](#using-a-custom-http-client) and the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration#opentelemetry)).
 
 ## Per-request options
 
@@ -259,7 +297,7 @@ It leaves an existing `config/anthropic.php` alone unless you add `--force`, whi
 
 ## Using a custom HTTP client
 
-The default client is Guzzle with the configured timeouts, retries, fallback models and `http.middleware`. If you need a different PSR-18 implementation, or Guzzle options the config doesn't cover, replace the client with `extend()` in a service provider's `register()` method:
+The default client is Guzzle with the configured timeouts, retries, fallback models, events and `http` settings. If you need a different PSR-18 implementation, or Guzzle options the config doesn't cover, replace the client with `extend()` in a service provider's `register()` method:
 
 ```php
 use Anthropic;
@@ -277,6 +315,6 @@ public function register(): void
 }
 ```
 
-The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys, and `withMiddleware(new \Anthropic\Laravel\Middleware\DispatchesEvents(fn () => app('events')))` to keep the events. For `laravel_client`, give your Guzzle client `'handler' => Http::buildHandlerStack()`, which fixes the fakes at the moment it's built. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
 
 Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).

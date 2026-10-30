@@ -9,12 +9,16 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic\Laravel\Middleware\DispatchesEvents;
 use Anthropic\Middleware\RefusalFallbackMiddleware;
 use GuzzleHttp\HandlerStack;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Support\DeferrableProvider;
+use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 use InvalidArgumentException;
+use Psr\Http\Message\RequestInterface;
 
 /**
  * @internal
@@ -58,6 +62,28 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 $stack->push($resolved);
             }
 
+            if (config('anthropic.http.laravel_client') === true) {
+                // Innermost, and built on each attempt from the HTTP factory of that moment, so an Http::fake() or
+                // Http::preventStrayRequests() set after the client was built still applies, and the app's own
+                // middleware runs before the fake answers. Laravel's own events come from DispatchesEvents, in pairs.
+                $stack->push(static fn (callable $handler): callable => static function (RequestInterface $request, array $options) use ($app, $handler) {
+                    $http = $app->make(HttpFactory::class);
+                    $pending = $http->createPendingRequest();
+                    $laravel = new HandlerStack($handler);
+
+                    foreach ($http->getGlobalMiddleware() as $global) {
+                        if (is_callable($global)) {
+                            $laravel->push($global);
+                        }
+                    }
+
+                    $laravel->push($pending->buildRecorderHandler());
+                    $laravel->push($pending->buildStubHandler());
+
+                    return $laravel($request, $options);
+                });
+            }
+
             $guzzleOptions['handler'] = $stack;
 
             $factory = Anthropic::factory()->withHttpClient(new \GuzzleHttp\Client($guzzleOptions));
@@ -77,6 +103,11 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
             if ($fallbackModels !== []) {
                 // No shared FallbackState: a worker's singleton would pin every user to a fallback after one refusal.
                 $factory = $factory->withMiddleware(new RefusalFallbackMiddleware($fallbackModels));
+            }
+
+            // After the fallback, so each of its attempts is an event of its own.
+            if ($app->bound(Dispatcher::class)) {
+                $factory = $factory->withMiddleware(new DispatchesEvents(static fn (): Dispatcher => $app->make(Dispatcher::class), 'default', config('anthropic.http.laravel_events') === true));
             }
 
             $maxRetries = config('anthropic.max_retries');

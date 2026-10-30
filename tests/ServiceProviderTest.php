@@ -280,6 +280,7 @@ it('reads the new keys from their environment variables', function () {
         'ANTHROPIC_CONNECT_TIMEOUT' => '5',
         'ANTHROPIC_MAX_RETRIES' => '2',
         'ANTHROPIC_FALLBACK_MODELS' => 'claude-opus-5, claude-opus-4-8',
+        'ANTHROPIC_HTTP_LARAVEL_CLIENT' => 'true',
     ]);
 
     expect($config)->toMatchArray([
@@ -288,7 +289,7 @@ it('reads the new keys from their environment variables', function () {
         'connect_timeout' => '5',
         'max_retries' => '2',
         'fallback_models' => ['claude-opus-5', 'claude-opus-4-8'],
-        'http' => ['middleware' => []],
+        'http' => ['middleware' => [], 'laravel_client' => true, 'laravel_events' => false],
         'headers' => [],
     ]);
 });

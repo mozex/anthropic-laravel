@@ -100,16 +100,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | HTTP Middleware
+    | HTTP Stack
     |--------------------------------------------------------------------------
     |
-    | Guzzle middleware pushed onto the client's handler stack, as class names
-    | the container resolves to a Guzzle middleware callable. Class names keep
-    | the config cacheable.
+    | `middleware` takes Guzzle middleware pushed onto the client's handler
+    | stack, as class names the container resolves to a Guzzle middleware
+    | callable. Class names keep the config cacheable.
+    |
+    | `laravel_client` builds the stack from Laravel's HTTP client, so
+    | Http::fake() and Http::assertSent() see the calls: an app's own
+    | Http::fake() then catches them too, so it's off by default.
+    |
+    | `laravel_events` also dispatches Laravel's own HTTP client events
+    | (ResponseReceived, ConnectionFailed), which Telescope records; other
+    | listeners of those events see the calls too, so it's off by default.
     */
 
     'http' => [
         'middleware' => [],
+        'laravel_client' => (bool) env('ANTHROPIC_HTTP_LARAVEL_CLIENT', false),
+        'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
     ],
 
     /*

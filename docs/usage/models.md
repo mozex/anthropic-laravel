@@ -119,6 +119,25 @@ Schedule::call(function () {
 
 A deprecated model whose `retiresAt` has already passed is overdue to retire, so treat it as gone.
 
+To move to a new model gradually, let [Pennant](https://laravel.com/docs/pennant) pick it per user, then finish or undo the rollout without a deploy, with `Feature::activateForEveryone('claude-sonnet-5-5')` or `deactivateForEveryone()`:
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+use App\Models\User;
+use Illuminate\Support\Lottery;
+use Laravel\Pennant\Feature;
+
+// AppServiceProvider::boot()
+Feature::define('claude-sonnet-5-5', fn (User $user) => Lottery::odds(1, 10)->choose());
+
+// where you call Claude; in a queued job, name the user: Feature::for($user)->active(...)
+$model = Feature::active('claude-sonnet-5-5') ? 'claude-sonnet-5-5' : 'claude-sonnet-4-6';
+
+$response = Anthropic::messages()->create(['model' => $model, 'max_tokens' => 1024, 'messages' => [...]]);
+```
+
+Pennant stores each user's result, so a user stays on one model while you compare their answers.
+
 ## Capabilities
 
 Each model reports what it supports through a `capabilities` object. The common fields are typed:

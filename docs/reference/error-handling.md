@@ -106,6 +106,25 @@ class AskClaudeJob implements ShouldQueue
 
 Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Catch `OverloadedException`, or check `getErrorType()`, never the status code: an overload in the middle of a stream comes with status 200 and still throws `OverloadedException`.
 
+On Laravel 13.30 or later you can set both rules once, in `bootstrap/app.php`: stop retrying a job on errors another try won't fix, and throttle how often overloads reach your error tracker (`throttle()` works on Laravel 12 too):
+
+```php
+use Anthropic\Exceptions\AuthenticationException;
+use Anthropic\Exceptions\BadRequestException;
+use Anthropic\Exceptions\OverloadedException;
+use Anthropic\Exceptions\PermissionDeniedException;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Configuration\Exceptions;
+
+->withExceptions(function (Exceptions $exceptions) {
+    $exceptions->dontRetry([BadRequestException::class, AuthenticationException::class, PermissionDeniedException::class]);
+
+    $exceptions->throttle(fn (Throwable $e) => $e instanceof OverloadedException
+        ? Limit::perMinute(5)
+        : Limit::none());
+})
+```
+
 ## Transport errors
 
 Network failures throw `TransporterException`. A failed connection (DNS, refused or dropped) throws its subclass `ConnectionException`, and a timeout throws `TimeoutException`, which extends `ConnectionException`:

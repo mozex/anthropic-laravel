@@ -10,11 +10,17 @@ This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw
 
 A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired']])`, used to go out in a form the API accepts and ignores, so the filter did nothing. It's now sent as `lifecycle[]=retired`, and the results follow it.
 
+### Events For Every Request
+
+**Likelihood Of Impact: Low**
+
+Every HTTP attempt now dispatches `Anthropic\Laravel\Events\RequestSending`, `ResponseReceived`, and on a failure `RequestFailed` (with `RateLimited` on a 429). A listener for those classes, or a wildcard listener, now sees them. Nothing is built or dispatched while no listener waits.
+
 ### New Config Keys
 
 **Likelihood Of Impact: Low**
 
-The config has seven new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`), `max_retries` (`ANTHROPIC_MAX_RETRIES`), `fallback_models` (`ANTHROPIC_FALLBACK_MODELS`), `http` (Guzzle middleware) and `headers`. A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
+The config has seven new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`), `max_retries` (`ANTHROPIC_MAX_RETRIES`), `fallback_models` (`ANTHROPIC_FALLBACK_MODELS`), `http` (Guzzle middleware, and the `laravel_client` and `laravel_events` switches, `ANTHROPIC_HTTP_LARAVEL_CLIENT` and `ANTHROPIC_HTTP_LARAVEL_EVENTS`) and `headers`. A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
 
 ## To 1.10.0
 

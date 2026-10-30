@@ -28,13 +28,34 @@ arch('facades')
         'Anthropic\Responses\Raw\RawResponse',
     ]);
 
+arch('events')
+    ->expect('Anthropic\Laravel\Events')
+    ->toUseNothing();
+
+arch('middleware')
+    ->expect('Anthropic\Laravel\Middleware')
+    ->toOnlyUse([
+        'Anthropic\Exceptions\ConnectionException',
+        'Anthropic\Exceptions\TimeoutException',
+        'Anthropic\Laravel\Events',
+        'Http\Discovery\Psr17Factory',
+        'Illuminate\Support\Testing\Fakes\Fake',
+        'Anthropic\Responses\Meta\MetaInformation',
+        'Illuminate\Contracts\Events\Dispatcher',
+        'Illuminate\Http\Client',
+        'Psr\Http\Message',
+    ]);
+
 arch('service providers')
     ->expect('Anthropic\Laravel\ServiceProvider')
     ->toOnlyUse([
         'GuzzleHttp\Client',
         'GuzzleHttp\HandlerStack',
         'Illuminate\Contracts\Container\Container',
+        'Illuminate\Contracts\Events\Dispatcher',
+        'Illuminate\Http\Client\Factory',
         'Illuminate\Support\ServiceProvider',
+        'Psr\Http\Message\RequestInterface',
         'Anthropic\Laravel',
         'Anthropic',
         'Illuminate\Contracts\Support\DeferrableProvider',

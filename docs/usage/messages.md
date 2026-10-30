@@ -174,7 +174,13 @@ $response = Anthropic::messages()->create([
 ]);
 ```
 
-Use an opaque identifier (UUID, hash). Don't send names or email addresses.
+Send an opaque ID, never an email or a name. For a signed-in user, a keyed hash of their ID keeps the Console's per-user view working without telling Anthropic who the user is (rotating `APP_KEY` gives everyone a new ID):
+
+```php
+'metadata' => [
+    'user_id' => hash_hmac('sha256', (string) auth()->id(), config('app.key')),
+],
+```
 
 ## Long-running requests in queues
 
