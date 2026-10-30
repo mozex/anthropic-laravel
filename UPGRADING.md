@@ -10,6 +10,12 @@ This release requires `mozex/anthropic-php` 1.13. Read its [upgrade notes](https
 
 `Anthropic::fake()` with no responses used to throw on the first call. It now answers each call with its method's default fake until you queue a response. A test that relied on the throw adds `->preventStrayRequests()`. See the client's upgrade notes for the rest of the fake's changes, among them stream and batch-result fakes whose `meta()` now carries the other fakes' headers.
 
+### Connections Are Anthropic\Laravel\Connection
+
+**Likelihood Of Impact: Low**
+
+`Anthropic::connection()` and `Anthropic::withApiKey()` return `Anthropic\Laravel\Connection`, a `ClientContract` that hands every call to the PHP client and adds `batch()`, where 1.12 returned the PHP client itself. Code that type-hints `ClientContract` keeps working. Code that checks for `Anthropic\Client` or `AnthropicFake`, or reads the client's properties, calls `->client()` first. `organization()`, `enterprise()` and `compliance()` still return the PHP client, and so do `app(ClientContract::class)` and `app('anthropic')`. A subclass of `AnthropicManager` that overrides `connection()` or `withApiKey()` declares `Connection` as the return type, and one whose `resolve()` returns a client wraps it: `new Connection($client, $name)`.
+
 ## To 1.12.0
 
 This release requires `mozex/anthropic-php` 1.12. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1120) as well.

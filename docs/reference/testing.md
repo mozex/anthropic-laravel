@@ -245,6 +245,34 @@ it('processes a Claude job', function () {
 });
 ```
 
+## Testing batches
+
+On the `sync` queue your tests probably run on, `Anthropic::batch()->dispatch()` runs the poll job at once, so queue the three answers it needs: the new batch, the batch once ended, and its results. `BatchResponse::fake()` and `BatchResultResponse::fake()` are an ended batch and its results:
+
+```php
+use Anthropic\Responses\Batches\BatchResponse;
+use Anthropic\Responses\Batches\BatchResultResponse;
+
+it('stores the answers of a batch', function () {
+    Anthropic::fake([
+        BatchResponse::fake(['processing_status' => 'in_progress']),
+        BatchResponse::fake(),
+        BatchResultResponse::fake([
+            ['custom_id' => 'article-1', 'result' => ['type' => 'succeeded', 'message' => CreateResponse::fake()->toArray()]],
+        ]),
+    ]);
+
+    app(SummarizeArticles::class)->handle();
+
+    Anthropic::assertBatched(fn (array $requests, string $connection) => count($requests) === 1 && $connection === 'default');
+    expect(Answer::count())->toBe(1);
+});
+```
+
+`assertBatched()` checks a batch was created, through `batch()` or `batches()->create()`, and takes a count too (`assertBatched(2)`); `assertNotBatched()` is its opposite. A first poll that finds the batch still `in_progress` throws on the `sync` queue, so queue an ended batch for it.
+
+To test only that the batch was sent, use `Queue::fake()`: the poll job is then pushed, not run, and `Queue::assertPushed(\Anthropic\Laravel\Batches\PollBatch::class)` sees it. `Event::fake([BatchResultReceived::class])` with the sync setup above lets you assert on each result's event.
+
 ## Testing errors
 
 Queue an exception. It's thrown when the matching request runs, and each API exception's `fake()` builds it as the client would, with its status, type, message and `request-id` on a real PSR-7 response:
@@ -308,7 +336,7 @@ test('it summarizes an article', function () {
 
 It rebuilds the default connection from your config with the recorder as its innermost middleware, so your events, listeners and fallback models run on the recorded answers as they would on live ones. The first run needs `ANTHROPIC_API_KEY`; commit the cassette, and CI replays it. Pass `record: true` to record again. A cassette keeps each answer's body and the headers the client reads, never your key or your prompts.
 
-Only the default connection is recorded: the facade's calls and an injected `ClientContract`. `Anthropic::connection()`, `withApiKey()` and `organization()` still reach the API, so fake those with `Anthropic::fake()`, and a recorded test asserts on what your code returned, since the fake's `assertSent()` isn't there. Give each test, and each dataset row, its own cassette: a replay checks each request's method and path, not its body. See the [PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/testing#record-and-replay) for what a cassette holds.
+Only the default connection is recorded: the facade's calls and an injected `ClientContract`. A named `Anthropic::connection('support')`, `withApiKey()` and `organization()` still reach the API, so fake those with `Anthropic::fake()`, and a recorded test asserts on what your code returned, since the fake's `assertSent()` isn't there. Give each test, and each dataset row, its own cassette: a replay checks each request's method and path, not its body. See the [PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/testing#record-and-replay) for what a cassette holds.
 
 ## Adding responses dynamically
 

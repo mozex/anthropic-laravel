@@ -10,6 +10,7 @@ use Anthropic\Exceptions\ErrorException;
 use Anthropic\Exceptions\NotFoundException;
 use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\ClientBuilder;
+use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -126,6 +127,8 @@ class DoctorCommand extends Command
      */
     private function settings(ClientContract $client): void
     {
+        $client = $client instanceof Connection ? $client->client() : $client;
+
         if (! $client instanceof Client) {
             return;
         }

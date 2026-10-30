@@ -6,6 +6,7 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Exceptions\ErrorException;
 use Anthropic\Laravel\AnthropicManager;
+use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
@@ -480,8 +481,10 @@ test('withOptions on the facade returns a client with the options, leaving the b
         return (new ReflectionProperty($transporter, 'headers'))->getValue($transporter)->toArray();
     };
 
-    expect($tenant)->toBeInstanceOf(Client::class)
-        ->and($headersOf($tenant)['anthropic-workspace-id'])->toBe('wrkspc_b')
-        ->and($headersOf($tenant)['anthropic-beta'])->toBe('compact-2026-09-04')
+    // a connection still, so batch() works on it, around a PHP client with the options
+    expect($tenant)->toBeInstanceOf(Connection::class)
+        ->and($tenant->client())->toBeInstanceOf(Client::class)
+        ->and($headersOf($tenant->client())['anthropic-workspace-id'])->toBe('wrkspc_b')
+        ->and($headersOf($tenant->client())['anthropic-beta'])->toBe('compact-2026-09-04')
         ->and($headersOf($app->get(ClientContract::class))['anthropic-workspace-id'])->toBe('wrkspc_a');
 });

@@ -17,6 +17,8 @@ Under the hood, every request is handled by the underlying PHP package, so you g
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake one, queue responses, and assert exactly which requests were sent. This pairs with Laravel's existing testing idioms (`Event::fake()`, `Queue::fake()`) so your test code stays consistent.
 
+**Batches the Laravel way.** `Anthropic::batch($requests)->then(...)->dispatch()` sends a Message Batch at half the price and queues a job that polls it until it ends, with an event per result. See [Batches](./usage/batches.md).
+
 **Connections, tenants and the Admin API.** Name connections in the config and reach them with `Anthropic::connection()`, build a client for a tenant's key with `Anthropic::withApiKey()`, and use `Anthropic::organization()` for the Admin API. One `Anthropic::fake()` answers all of them. See [Configuration](./reference/configuration.md#connections).
 
 **Built for production.** Events for every request, request IDs in your logs and error tracker, optional Context, Telescope and Nightwatch recording, and `php artisan anthropic:doctor` to catch a queue that would run a Claude call twice. See [Diagnostics](./reference/diagnostics.md).

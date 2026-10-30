@@ -6,6 +6,7 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\AnthropicServiceProvider;
+use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Events\RequestSending;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\Facades\Anthropic;
@@ -37,6 +38,7 @@ uses(TestCase::class);
  */
 function managerHeaders(ClientContract $client): array
 {
+    $client = $client instanceof Connection ? $client->client() : $client;
     $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
 
     return (new ReflectionProperty($transporter, 'headers'))->getValue($transporter)->toArray();
@@ -44,6 +46,7 @@ function managerHeaders(ClientContract $client): array
 
 function managerBaseUri(ClientContract $client): string
 {
+    $client = $client instanceof Connection ? $client->client() : $client;
     $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
 
     return (new ReflectionProperty($transporter, 'baseUri'))->getValue($transporter)->toString();
@@ -64,7 +67,9 @@ afterEach(function () {
 
 test('the facade\'s root is the manager, and its default connection is the bound client', function () {
     expect(Anthropic::getFacadeRoot())->toBeInstanceOf(AnthropicManager::class)
-        ->and(Anthropic::connection())->toBe(app(ClientContract::class))
+        ->and(Anthropic::connection())->toBeInstanceOf(Connection::class)
+        ->and(Anthropic::connection()->name)->toBe('default')
+        ->and(Anthropic::connection()->client())->toBe(app(ClientContract::class))
         ->and(app('anthropic'))->toBe(app(ClientContract::class))
         ->and(app(Client::class))->toBe(app(ClientContract::class))
         ->and(Anthropic::models())->toBeInstanceOf(Models::class);
@@ -218,7 +223,7 @@ test('one fake answers every connection and a type-hinted manager, recording whi
     $fake->assertNotSentOn('organization', Messages::class);
 
     // the inherited instance() answers from the fake too
-    expect(Anthropic::instance('support'))->toBeInstanceOf(AnthropicFake::class);
+    expect(Anthropic::instance('support')->client())->toBeInstanceOf(AnthropicFake::class);
 
     expect(app(ClientContract::class))->toBe($fake)
         ->and(serialize($fake))->not->toContain('sk-ant-tenant');
@@ -279,7 +284,7 @@ test('this package\'s own key wins over laravel/ai\'s', function () {
 test('an app\'s extend() of the client contract reaches the facade', function () {
     app()->extend(ClientContract::class, fn (ClientContract $client) => new AnthropicFake([RetrieveResponse::fake()]));
 
-    expect(Anthropic::connection())->toBeInstanceOf(AnthropicFake::class)
+    expect(Anthropic::connection()->client())->toBeInstanceOf(AnthropicFake::class)
         ->and(Anthropic::models()->retrieve('claude-opus-5-5'))->toBeInstanceOf(RetrieveResponse::class);
 });
 
@@ -294,7 +299,7 @@ test("cached connections are forgotten between a worker's jobs and Octane's requ
     expect(Anthropic::connection('support'))->not->toBe($support)
         ->and(Anthropic::organization())->not->toBe($organization)
         // the default connection is the container's binding, kept as it was resolved
-        ->and(Anthropic::connection())->toBe($default);
+        ->and(Anthropic::connection()->client())->toBe($default->client());
 })->with([
     'a queue loop' => [fn () => event(new Looping('redis', 'default'))],
     'an Octane operation' => [fn () => event('Laravel\Octane\Contracts\OperationTerminated')],

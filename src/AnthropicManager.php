@@ -14,10 +14,11 @@ use SensitiveParameter;
 
 /**
  * The facade's root: the default connection (the top-level keys of `config/anthropic.php`), the named ones under
- * `connections`, each inheriting what it doesn't set, and clients for a key of the app's choosing. Calls it doesn't
- * know go to the default connection.
+ * `connections`, each inheriting what it doesn't set, and clients for a key of the app's choosing. Each connection is a
+ * `Connection`: the PHP client plus Laravel's methods, such as `batch()`. Calls it doesn't know go to the default
+ * connection.
  *
- * @mixin ClientContract
+ * @mixin Connection
  */
 class AnthropicManager extends MultipleInstanceManager
 {
@@ -52,9 +53,9 @@ class AnthropicManager extends MultipleInstanceManager
     /**
      * The named connection's client; the default one without a name.
      */
-    public function connection(?string $name = null): ClientContract
+    public function connection(?string $name = null): Connection
     {
-        /** @var ClientContract */
+        /** @var Connection */
         return $this->instance($name);
     }
 
@@ -77,7 +78,7 @@ class AnthropicManager extends MultipleInstanceManager
                 throw new InvalidArgumentException("Instance [{$name}] is not defined.");
             }
 
-            return $this->fake->onConnection($name);
+            return new Connection($this->fake->onConnection($name), $name);
         }
 
         return parent::instance($name);
@@ -85,21 +86,23 @@ class AnthropicManager extends MultipleInstanceManager
 
     /**
      * A client of the default connection's settings with another API key, such as a tenant's. A new one on every call,
-     * never cached, so a key never outlives the request or job it was meant for. It sends no `workspace_id`: the
-     * default one belongs to the app's key, and the API answers another key sent with it with a 404.
+     * never cached, so a key never outlives the request or job it was meant for; a batch sent through it keeps the key,
+     * encrypted, in its poll job until the batch ends. It sends no `workspace_id`: the default one belongs to the app's
+     * key, and the API answers another key sent with it with a 404.
      */
-    public function withApiKey(#[SensitiveParameter] string $apiKey): ClientContract
+    public function withApiKey(#[SensitiveParameter] string $apiKey): Connection
     {
         // A tenant's empty key column would otherwise build a client that sends no credential at all.
         if (trim($apiKey) === '') {
             throw ApiKeyIsMissing::forTenant();
         }
 
-        if ($this->fake instanceof AnthropicFake) {
-            return $this->fake->onConnection(self::DEFAULT);
-        }
+        $client = $this->fake instanceof AnthropicFake
+            ? $this->fake->onConnection(self::DEFAULT)
+            : ClientBuilder::make($this->app, [...$this->defaultSettings(), 'api_key' => $apiKey, 'auth_token' => null, 'workspace_id' => null], self::DEFAULT);
 
-        return ClientBuilder::make($this->app, [...$this->defaultSettings(), 'api_key' => $apiKey, 'auth_token' => null, 'workspace_id' => null], self::DEFAULT);
+        // The connection keeps the key, so a batch sent through it is polled with it too.
+        return new Connection($client, self::DEFAULT, $apiKey);
     }
 
     /**
@@ -195,7 +198,10 @@ class AnthropicManager extends MultipleInstanceManager
      */
     protected function resolve($name): mixed
     {
-        return $name === self::DEFAULT ? $this->app->make(ClientContract::class) : parent::resolve($name);
+        /** @var ClientContract $client */
+        $client = $name === self::DEFAULT ? $this->app->make(ClientContract::class) : parent::resolve($name);
+
+        return $client instanceof Connection ? $client : new Connection($client, $name);
     }
 
     /**
