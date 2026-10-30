@@ -8,6 +8,7 @@ use Anthropic\Exceptions\ErrorException;
 use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Facades\Anthropic;
+use Anthropic\Laravel\Resources\Messages as LaravelMessages;
 use Anthropic\Laravel\Resources\Models as LaravelModels;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
@@ -23,7 +24,6 @@ use Anthropic\Responses\Files\FileResponse;
 use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
 use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
 use Anthropic\Responses\Raw\RawResponse;
-use Anthropic\Testing\Resources\MessagesTestResource;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
@@ -50,7 +50,7 @@ it('resolves resources', function () {
     Anthropic::setFacadeApplication($app);
 
     expect(Anthropic::completions())->toBeInstanceOf(Completions::class)
-        ->and(Anthropic::messages())->toBeInstanceOf(Messages::class)
+        ->and(Anthropic::messages())->toBeInstanceOf(LaravelMessages::class)
         ->and(Anthropic::models())->toBeInstanceOf(LaravelModels::class)
         ->and(Anthropic::batches())->toBeInstanceOf(Batches::class)
         ->and(Anthropic::files())->toBeInstanceOf(Files::class);
@@ -407,7 +407,7 @@ test('fake reaches code that type-hints the client contract, before and after th
         expect($app->make(ClaudeGreeter::class)->client)->toBe($fake)
             // the facade's root is the manager, whose connections answer from the fake
             ->and(Anthropic::getFacadeRoot())->toBeInstanceOf(AnthropicManager::class)
-            ->and(Anthropic::messages())->toBeInstanceOf(MessagesTestResource::class);
+            ->and(Anthropic::messages()->create(['model' => 'claude-sonnet-5-5', 'max_tokens' => 1, 'messages' => []])->id)->toBe(MessagesCreateResponse::fake()->id);
     } finally {
         Container::setInstance($container);
         Facade::clearResolvedInstances();

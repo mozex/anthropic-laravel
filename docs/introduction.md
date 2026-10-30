@@ -119,7 +119,7 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 **Usage** covers all API operations:
 
 - [Messages](./usage/messages.md): Send messages and read responses
-- [Streaming](./usage/streaming.md): Stream responses token by token
+- [Streaming](./usage/streaming.md): Stream responses token by token, straight to the browser
 - [Tool Use](./usage/tool-use.md): Give Claude custom functions to call
 - [Thinking](./usage/thinking.md): Adaptive and extended thinking for complex reasoning
 - [Server Tools](./usage/server-tools.md): Web search and sandboxed code execution

@@ -130,24 +130,19 @@ echo $response->content[0]->text; // Hello! How can I assist you today?
 
 ### Streaming
 
-Print text as it arrives:
+Stream the reply straight to the browser, for `useEventStream` from `@laravel/stream-react`, `-vue` or `-svelte` (pass it `glue: ''`, since it joins the parts with a space by default):
 
 ```php
-$stream = Anthropic::messages()->createStreamed([
+Route::get('/chat', fn () => Anthropic::messages()->createStreamed([
     'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
     'messages' => [
         ['role' => 'user', 'content' => 'Tell me a short story.'],
     ],
-]);
-
-foreach ($stream as $response) {
-    if ($response->type === 'content_block_delta'
-        && $response->delta->type === 'text_delta') {
-        echo $response->delta->text;
-    }
-}
+])->toEventStream());
 ```
+
+`toTextStream()` serves `useStream`, and `toVercelStream()` the AI SDK's `useChat`. In PHP, `$stream->text()` yields the text deltas and `$stream->finalMessage()` returns the whole response.
 
 ### Tool Use
 

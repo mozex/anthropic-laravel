@@ -285,36 +285,29 @@ On-demand compaction (beta `compact-2026-09-04`, `'compaction' => ['type' => 'su
 - `message_delta`: final `stop_reason` and usage; `$event->delta->stop_details` on a refusal, `$event->delta->container` after code execution
 
 ```php
-foreach ($stream as $event) {
-    if ($event->type === 'content_block_delta' && $event->delta->type === 'text_delta') {
-        echo $event->delta->text;
-    }
+foreach ($stream->text() as $delta) {   // text deltas only
+    echo $delta;
 }
+
+$message = $stream->finalMessage();     // reads the rest; a CreateResponse as create() returns it
 ```
+
+`finalText()` joins the text blocks; `currentMessage()` is the message so far (`stop_reason` null mid-stream). Callbacks run as events are read, before the loop gets them: `onText(fn (string $delta) => ...)`, `onThinking()`, `onContentBlock(fn (CreateResponseContent $block) => ...)` (a tool call with `input` decoded), `onMessage(fn (CreateResponse $message) => ...)`, `onEvent()`. `Anthropic\Responses\Messages\MessageAccumulator` folds decoded events read another way (`->add($event)`, `->message()`).
 
 Some blocks arrive whole in `content_block_start` with no deltas: an on-demand `compaction` block (its `content` is a string there, with `signature`), `fallback` and `advisor_tool_result`.
 
 ### To the browser
 
-```php
-use Symfony\Component\HttpFoundation\StreamedResponse;
+Return the stream from a route: `->toEventStream()` for `useEventStream` (`@laravel/stream-react|vue|svelte`; pass `glue: ''`, or deltas are joined with spaces), `->toTextStream()` for `useStream`, `->toVercelStream()` for the AI SDK's `useChat` (header `x-vercel-ai-ui-message-stream: v1`, ends in `data: [DONE]`; server tools aren't sent). Every stream `Anthropic::messages()->createStreamed()` (or a connection's) returns has them, under `Anthropic::fake()` too; an injected `ClientContract`'s stream doesn't, so inject `AnthropicManager` or call `->as(\Anthropic\Laravel\Responses\StreamResponse::class)` before reading. `useStream` and `useChat` POST, so those two go on a `Route::post`.
 
-return new StreamedResponse(function () use ($stream) {
-    foreach ($stream as $event) {
-        if ($event->type === 'content_block_delta' && $event->delta->type === 'text_delta') {
-            echo 'data: ' . json_encode(['text' => $event->delta->text]) . "\n\n";
-            ob_flush();
-            flush();
-        }
-    }
-}, 200, [
-    'Content-Type' => 'text/event-stream',
-    'Cache-Control' => 'no-cache',
-    'X-Accel-Buffering' => 'no', // disables nginx buffering
-]);
+```php
+Route::get('/conversations/{conversation}/reply', fn (Conversation $conversation) => Anthropic::messages()
+    ->createStreamed([...])
+    ->onMessage(fn (CreateResponse $message) => $conversation->messages()->create(['role' => 'assistant', 'content' => $message->toArray()['content']]))
+    ->toEventStream());
 ```
 
-Without `X-Accel-Buffering: no`, chunks arrive in bursts behind nginx.
+`EventSource` is GET only: POST the user's message, then stream the reply from a GET route. `toEventStream()` sends each line of a delta on its own `data:` line, and on a failure reports it and sends an `error` event (the API's type and message only), then always the `</stream>` marker, so the browser doesn't reconnect and bill the call again. A stream cut off upstream is reported and sent as an error too. The event streams send `: keep-alive` after 15 quiet seconds while events arrive that the browser isn't sent; with `thinking.display: 'omitted'` nothing arrives while Claude thinks, so the proxy's read timeout must outlast the think. They also send `X-Accel-Buffering: no`. All three stop on `connection_aborted()`, which works under PHP-FPM: under Octane, Swoole runs the reply to the end (billed in full) and RoadRunner buffers a `StreamedResponse` whole. No refusal signal reaches the browser: check `stop_reason` in `onMessage()`. A GET reply route bills on every open, a reload included: stream only when the last stored message is the user's. Never hand-roll a `StreamedResponse` with `ob_flush()`.
 
 ### Broadcasting and cancel
 

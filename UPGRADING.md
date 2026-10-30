@@ -1,5 +1,15 @@
 # Upgrading
 
+## To 1.15.0
+
+This release requires `mozex/anthropic-php` 1.15. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1150) as well.
+
+### Anthropic::messages() Returns The Package's Own Resource
+
+**Likelihood Of Impact: Low**
+
+`Anthropic::messages()` and a connection's `messages()` return `Anthropic\Laravel\Resources\Messages`, which implements `MessagesContract` and passes every call to the client's resource, as `models()` already did. Its `createStreamed()` returns `Anthropic\Laravel\Responses\StreamResponse`, a subclass of the client's stream with `toEventStream()`, `toTextStream()` and `toVercelStream()`. Code typed against `MessagesContract` or the client's `StreamResponse` keeps working. A check like `instanceof Anthropic\Resources\Messages`, or `instanceof MessagesTestResource` under the fake, is now false, and a parameter or property typed with either class throws a `TypeError`: type it `MessagesContract`, and assert on the fake with `Anthropic::assertSent()`. Under the fake, `createStreamed()` hands your queued stream on as a copy with its callbacks, so after the code under test reads it, the queued instance's own `completed()` and `usage()` stay empty.
+
 ## To 1.14.0
 
 This release requires `mozex/anthropic-php` 1.14. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1140) as well.

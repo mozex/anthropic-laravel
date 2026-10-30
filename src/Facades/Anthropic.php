@@ -23,7 +23,7 @@ use Throwable;
 
 /**
  * @method static \Anthropic\Resources\Completions completions()
- * @method static \Anthropic\Resources\Messages messages()
+ * @method static \Anthropic\Laravel\Resources\Messages messages()
  * @method static \Anthropic\Laravel\Resources\Models models()
  * @method static \Anthropic\Resources\Batches batches()
  * @method static \Anthropic\Resources\Files files()

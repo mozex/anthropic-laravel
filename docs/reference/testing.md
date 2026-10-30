@@ -316,6 +316,8 @@ it('streams the reply', function () {
 });
 ```
 
+`$stream->finalText()` gets the same text in one call. A route that returns `toEventStream()` or another browser response works the same way under the fake: read what it sent with `$this->get('/chat')->streamedContent()`.
+
 For exact control, pass a list of event arrays instead, or a file resource of recorded SSE. `Blocks` also builds `toolUse()`, `thinking()`, `serverToolUse()` and `webSearchToolResult()` blocks for a fake's `content`, and `BatchResultResponse::fake([...])` takes the result lines a batch's results would hold.
 
 ## Testing token budgets

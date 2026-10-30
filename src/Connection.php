@@ -9,8 +9,8 @@ use Anthropic\Contracts\ClientContract;
 use Anthropic\Contracts\Resources\BatchesContract;
 use Anthropic\Contracts\Resources\CompletionsContract;
 use Anthropic\Contracts\Resources\FilesContract;
-use Anthropic\Contracts\Resources\MessagesContract;
 use Anthropic\Laravel\Batches\PendingBatch;
+use Anthropic\Laravel\Resources\Messages;
 use Anthropic\Laravel\Resources\Models;
 use Anthropic\Responses\Raw\RawResponse;
 use SensitiveParameter;
@@ -72,9 +72,12 @@ class Connection implements ClientContract
         return $this->client->completions();
     }
 
-    public function messages(): MessagesContract
+    /**
+     * The Messages resource, whose streams have Laravel's responses (`toEventStream()` and the others).
+     */
+    public function messages(): Messages
     {
-        return $this->client->messages();
+        return new Messages($this->client->messages());
     }
 
     /**

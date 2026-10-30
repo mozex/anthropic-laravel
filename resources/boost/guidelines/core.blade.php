@@ -2,7 +2,7 @@
 
 Claude through the `Anthropic` facade (`Anthropic\Laravel\Facades\Anthropic`). The `anthropic-laravel` skill has the details; these are the rules that bite.
 
-- Type-hint `Anthropic\Contracts\ClientContract`, never `Anthropic\Client`, so `Anthropic::fake()` reaches injected code. In tests, `Anthropic::fake([CreateResponse::fake([...])])` then `Anthropic::assertSent(Messages::class, ...)`: nothing reaches the API.
+- Type-hint `Anthropic\Contracts\ClientContract`, never `Anthropic\Client`, so `Anthropic::fake()` reaches injected code. Its streams are the PHP client's: for `toEventStream()` and the other browser responses, use the facade or inject `Anthropic\Laravel\AnthropicManager`. In tests, `Anthropic::fake([CreateResponse::fake([...])])` then `Anthropic::assertSent(\Anthropic\Resources\Messages::class, ...)` (the client's resource class, not the wrapper's): nothing reaches the API.
 - Casing follows the wire format: `$response->stop_reason`, but `$response->usage->inputTokens`. Check the DTO rather than guess.
 - A refusal is HTTP 200 with `stop_reason === 'refusal'`, and `stop_reason === 'pause_turn'` means echo the content back and call again. Neither throws, so branch on `stop_reason`.
 - Dispatch `tool_use` blocks on the (`toolset_name`, `name`) pair, never on `name` alone, and run a block whose `caller` names code execution too.
