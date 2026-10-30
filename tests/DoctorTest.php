@@ -231,6 +231,23 @@ test('about shows a client the config can\'t build', function () {
         ->assertSuccessful();
 });
 
+test("Livewire beside Octane warns that wire:stream won't work, without failing", function () {
+    // Neither is a dependency: stand-in classes are enough for the doctor's check.
+    if (! class_exists('Livewire\Livewire')) {
+        eval('namespace Livewire; class Livewire {}');
+    }
+
+    if (! class_exists('Laravel\Octane\Octane')) {
+        eval('namespace Laravel\Octane; class Octane {}');
+    }
+
+    Http::fake(['api.anthropic.com/*' => Http::response(ListResponse::fake()->toArray())]);
+
+    $this->artisan('anthropic:doctor')
+        ->expectsOutputToContain("WARN wire:stream doesn't work under Octane")
+        ->assertSuccessful();
+});
+
 test('about says a missing credential is missing', function () {
     config(['anthropic.api_key' => null]);
 
