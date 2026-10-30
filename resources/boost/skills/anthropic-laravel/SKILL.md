@@ -244,6 +244,13 @@ Anything with extended thinking, code execution, or large context pushes past ty
 
 On-demand compaction (beta `compact-2026-09-04`, `'compaction' => ['type' => 'summarize']`) returns one signed `compaction` block with `stop_reason: 'compaction'`; any other stop reason means no summary, so keep the history. On every later request, with the same beta header, send the block exactly as `toArray()` returns it (`signature` included, no extra keys), first in `messages`, and drop the turns it summarized. Threshold compaction (`compact-2026-01-12`, `'context_management' => ['edits' => [['type' => 'compact_20260112']]]`) also expects its `compaction` block back unchanged.
 
+### More request options
+
+- **Mid-conversation tool changes** (beta `mid-conversation-tool-changes-2026-07-01`, or `inline-tools-2026-09-15` on the Claude API for inline definitions): a `role: system` message whose content is `tool_addition` or `tool_removal` blocks (`['type' => 'tool_removal', 'tool' => ['type' => 'tool_reference', 'name' => 'get_weather']]`) adds or removes tools without editing `tools`, which would break the prompt cache.
+- **Cache diagnostics** (GA, no header): send `'diagnostics' => ['previous_message_id' => null]` on the first turn and the previous response's `id` after that; `$response->diagnostics?->cache_miss_reason?->type` says why the cache missed (`system_changed`, `tools_changed` ...).
+- **Fast mode**: `'speed' => 'fast'` on Opus 5.5 (GA, no header); `$response->usage->speed` reports what served it, `$meta->fastInputTokenLimit` its own rate limit. Not available with batches.
+- **Dropped thinking on replay** (beta `thinking-binding-controls-2026-08-01`): `'thinking' => ['type' => 'adaptive', 'block_binding' => ['prefix_mismatch_behavior' => 'drop_block']]` drops replayed thinking blocks that no longer match (another model, an edited history) instead of failing; `$response->input_transformations` lists them (`thinking_dropped` with a `path` and `reason`).
+
 ## Streaming
 
 `createStreamed()` takes the same shape as `create()` and returns an iterable `StreamResponse`. The client skips `ping` and ends the loop at `message_stop`. Your loop sees these five event types, plus any type the API adds later, so always branch on `$event->type`:
