@@ -9,6 +9,7 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic\Middleware\RefusalFallbackMiddleware;
 use GuzzleHttp\HandlerStack;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Support\DeferrableProvider;
@@ -60,6 +61,23 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
             $guzzleOptions['handler'] = $stack;
 
             $factory = Anthropic::factory()->withHttpClient(new \GuzzleHttp\Client($guzzleOptions));
+
+            $fallbackModels = config('anthropic.fallback_models', []);
+
+            // A config written by hand as env('ANTHROPIC_FALLBACK_MODELS') gives the comma-separated string itself.
+            if (is_string($fallbackModels)) {
+                $fallbackModels = explode(',', $fallbackModels);
+            }
+
+            $fallbackModels = array_values(array_filter(array_map(
+                static fn (mixed $model): string => is_string($model) ? trim($model) : '',
+                is_array($fallbackModels) ? $fallbackModels : [],
+            )));
+
+            if ($fallbackModels !== []) {
+                // No shared FallbackState: a worker's singleton would pin every user to a fallback after one refusal.
+                $factory = $factory->withMiddleware(new RefusalFallbackMiddleware($fallbackModels));
+            }
 
             $maxRetries = config('anthropic.max_retries');
 

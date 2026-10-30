@@ -46,11 +46,11 @@ it('publishes the config and adds the api key variable', function () {
 it('adds the optional variables commented out', function () {
     $this->artisan('anthropic:install')
         ->expectsConfirmation(STAR_QUESTION, 'no')
-        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES added.')
+        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES, ANTHROPIC_FALLBACK_MODELS added.')
         ->assertSuccessful();
 
     expect(file_get_contents(base_path('.env.example')))
-        ->toEndWith(PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL);
+        ->toEndWith(PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL.'# ANTHROPIC_FALLBACK_MODELS='.PHP_EOL);
 });
 
 it('adds only the variables an env file lacks', function () {
@@ -58,7 +58,7 @@ it('adds only the variables an env file lacks', function () {
 
     $this->artisan('anthropic:install')
         ->expectsConfirmation(STAR_QUESTION, 'no')
-        ->expectsOutputToContain('ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES added.')
+        ->expectsOutputToContain('ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES, ANTHROPIC_FALLBACK_MODELS added.')
         ->assertSuccessful();
 
     $envExample = (string) file_get_contents(base_path('.env.example'));
@@ -66,7 +66,7 @@ it('adds only the variables an env file lacks', function () {
     expect(substr_count($envExample, 'ANTHROPIC_API_KEY'))->toBe(1)
         ->and(substr_count($envExample, 'ANTHROPIC_API_VERSION'))->toBe(1)
         ->and($envExample)->toContain('ANTHROPIC_API_KEY=sk-ant-test')
-        ->and($envExample)->toEndWith(PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL);
+        ->and($envExample)->toEndWith(PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL.'# ANTHROPIC_FALLBACK_MODELS='.PHP_EOL);
 });
 
 it('adds a key whose name only appears inside another name or a value', function () {
@@ -74,12 +74,12 @@ it('adds a key whose name only appears inside another name or a value', function
 
     $this->artisan('anthropic:install')
         ->expectsConfirmation(STAR_QUESTION, 'no')
-        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES added.')
+        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, ANTHROPIC_WORKSPACE_ID, ANTHROPIC_CONNECT_TIMEOUT, ANTHROPIC_MAX_RETRIES, ANTHROPIC_FALLBACK_MODELS added.')
         ->assertSuccessful();
 });
 
 it('counts quoted and commented-out export lines as present', function () {
-    $quoted = $this->envExample.PHP_EOL.'"ANTHROPIC_API_KEY"=sk-ant-test'.PHP_EOL.'# export ANTHROPIC_API_VERSION='.PHP_EOL.'## ANTHROPIC_BASE_URL='.PHP_EOL.'ANTHROPIC_AUTH_TOKEN=x'.PHP_EOL.'#ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'"ANTHROPIC_CONNECT_TIMEOUT"=5'.PHP_EOL.'ANTHROPIC_MAX_RETRIES=2'.PHP_EOL;
+    $quoted = $this->envExample.PHP_EOL.'"ANTHROPIC_API_KEY"=sk-ant-test'.PHP_EOL.'# export ANTHROPIC_API_VERSION='.PHP_EOL.'## ANTHROPIC_BASE_URL='.PHP_EOL.'ANTHROPIC_AUTH_TOKEN=x'.PHP_EOL.'#ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'"ANTHROPIC_CONNECT_TIMEOUT"=5'.PHP_EOL.'ANTHROPIC_MAX_RETRIES=2'.PHP_EOL.'ANTHROPIC_FALLBACK_MODELS=claude-opus-4-8'.PHP_EOL;
 
     file_put_contents(base_path('.env.example'), $quoted);
 
@@ -96,7 +96,7 @@ it('names the keys a config published by an older release lacks', function () {
 
     $this->artisan('anthropic:install')
         ->expectsConfirmation(STAR_QUESTION, 'no')
-        ->expectsOutputToContain('File already exists, without auth_token, workspace_id, connect_timeout, max_retries, http, headers, api_version, base_url.')
+        ->expectsOutputToContain('File already exists, without auth_token, workspace_id, connect_timeout, max_retries, fallback_models, http, headers, api_version, base_url.')
         ->expectsOutputToContain('Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php.')
         ->assertSuccessful();
 });
@@ -112,7 +112,7 @@ it('says nothing more when the published config has every key', function () {
 });
 
 it('leaves an env file that has every variable as it is', function () {
-    $complete = $this->envExample.PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'export ANTHROPIC_BASE_URL=https://gateway.example.com'.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL;
+    $complete = $this->envExample.PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'export ANTHROPIC_BASE_URL=https://gateway.example.com'.PHP_EOL.'# ANTHROPIC_AUTH_TOKEN='.PHP_EOL.'# ANTHROPIC_WORKSPACE_ID='.PHP_EOL.'# ANTHROPIC_CONNECT_TIMEOUT='.PHP_EOL.'# ANTHROPIC_MAX_RETRIES='.PHP_EOL.'# ANTHROPIC_FALLBACK_MODELS='.PHP_EOL;
 
     file_put_contents(base_path('.env.example'), $complete);
 

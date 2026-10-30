@@ -255,7 +255,27 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 }
 ```
 
-Each attempt is billed at its own model's rates, and `usage->iterations` is the per-attempt record. For the `fallback` content block, sticky routing, and echo rules on later turns, see the [refusal handling section in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/messages).
+Where server-side fallback isn't available, list fallback models in `.env` and the package retries a refused request on them itself, in order, redeeming the refusal's fallback credit when it carries one (a Claude Haiku 5.5 refusal doesn't):
+
+```env
+ANTHROPIC_FALLBACK_MODELS=claude-opus-4-8
+```
+
+The list applies to every model your app calls, and each fallback has to be one the refused model allows: Claude Opus 4.8 or Opus 5 after Claude Fable 5 or Opus 5.5, Claude Sonnet 5 after Claude Sonnet 5.5 (the [fallback credit guide](https://platform.claude.com/docs/en/build-with-claude/fallback-credit) has the full list). Don't combine it with `fallbacks`: with the variable set, a request that passes `fallbacks` throws, so pick one. Streamed requests are left alone, and one call can now take a request timeout per model it tries, so size a queued job's `$timeout` for the chain.
+
+Each request starts from the model you asked for. To keep a conversation on the model that answered, store it and ask for it next time:
+
+```php
+$response = Anthropic::messages()->create([
+    'model' => $conversation->model ?? 'claude-fable-5',
+    'max_tokens' => 1024,
+    'messages' => $conversation->messages(),
+]);
+
+$conversation->update(['model' => $response->model]);
+```
+
+Each attempt is billed at its own model's rates, and `usage->iterations` is the per-attempt record. For the `fallback` content block, sticky routing, echo rules on later turns and the middleware's per-model settings, see the [refusal handling section in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/messages#falling-back-on-the-client).
 
 ## The `pause_turn` stop reason
 

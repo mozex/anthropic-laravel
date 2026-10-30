@@ -43,6 +43,10 @@ return [
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
     'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
     'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+    'fallback_models' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('ANTHROPIC_FALLBACK_MODELS', ''))
+    ))),
     'http' => [
         'middleware' => [],
     ],
@@ -56,7 +60,7 @@ return [
 ];
 ```
 
-`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. `auth_token` sends `Authorization: Bearer` (a Workload Identity Federation access token) when no key is set, one credential as in the official SDKs (a shell-exported `ANTHROPIC_AUTH_TOKEN`, which Claude Code reads too, reaches an app without a key); `workspace_id` sends `anthropic-workspace-id`, needed by keys not scoped to one workspace; `connect_timeout` is the Guzzle connect timeout, which streamed requests ignore; `max_retries` (default 0; the official SDKs use 2) retries connection failures, timeouts, 408/409/429 and 5xx, waiting what the API asks (one call can then take `max_retries + 1` request timeouts plus those waits, so size a job's `$timeout` and the queue's `retry_after` for it; a job that releases itself on a 429 turns them off with `withOptions(['max_retries' => 0])`); `http.middleware` takes Guzzle middleware class names, resolved from the container, and reaches only the package's own Guzzle client; `headers` (no env variable) go on every request, applied last. A config file published by an older release lacks the newer keys; re-running `anthropic:install` names what's missing.
+`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. `auth_token` sends `Authorization: Bearer` (a Workload Identity Federation access token) when no key is set, one credential as in the official SDKs (a shell-exported `ANTHROPIC_AUTH_TOKEN`, which Claude Code reads too, reaches an app without a key); `workspace_id` sends `anthropic-workspace-id`, needed by keys not scoped to one workspace; `connect_timeout` is the Guzzle connect timeout, which streamed requests ignore; `max_retries` (default 0; the official SDKs use 2) retries connection failures, timeouts, 408/409/429 and 5xx, waiting what the API asks (one call can then take `max_retries + 1` request timeouts plus those waits, so size a job's `$timeout` and the queue's `retry_after` for it; a job that releases itself on a 429 turns them off with `withOptions(['max_retries' => 0])`); `fallback_models` (`ANTHROPIC_FALLBACK_MODELS=claude-opus-4-8`) retries a refused non-streamed Messages request on those models in order, redeeming the refusal's fallback credit (`Anthropic\Middleware\RefusalFallbackMiddleware`, model names only; one list for every model the app calls, so each name must be a permitted fallback of the refused model: Opus 4.8 or Opus 5 after Fable 5 or Opus 5.5, Sonnet 5 after Sonnet 5.5; no shared `FallbackState`, so each request starts from the requested model: to keep a conversation on the model that accepted, store `$response->model` and request it next turn; a request with `fallbacks` throws while it's set); `http.middleware` takes Guzzle middleware class names, resolved from the container, and reaches only the package's own Guzzle client; `headers` (no env variable) go on every request, applied last. A config file published by an older release lacks the newer keys; re-running `anthropic:install` names what's missing.
 
 `Anthropic::withOptions(['workspace_id' => ..., 'betas' => [...], 'headers' => [...], 'query' => [...], 'api_version' => ..., 'user_profile_id' => ..., 'max_retries' => ...])` returns a client for one tenant or feature, leaving the app-wide one unchanged; it's also how ID-only methods (`models()->retrieve()`) get betas. Under `Anthropic::fake()` it shares the fake's queue; assert with `Anthropic::assertSentWithOptions(Messages::class, ['workspace_id' => ...])`.
 
@@ -665,7 +669,7 @@ For an endpoint the package has no method for yet, `Anthropic::request('GET', 's
 
 ## Direct SDK factory (rare)
 
-Only when you need a custom HTTP client, headers, or stream handler (the API version, base URL, retries and Guzzle middleware have config keys):
+Only when you need a custom HTTP client, headers, or stream handler (the API version, base URL, retries, refusal fallback and Guzzle middleware have config keys):
 
 ```php
 $client = \Anthropic::factory() // the PHP client's class, not the facade

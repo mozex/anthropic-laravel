@@ -33,6 +33,7 @@ class InstallCommand extends Command
         'ANTHROPIC_WORKSPACE_ID' => '# ANTHROPIC_WORKSPACE_ID=',
         'ANTHROPIC_CONNECT_TIMEOUT' => '# ANTHROPIC_CONNECT_TIMEOUT=',
         'ANTHROPIC_MAX_RETRIES' => '# ANTHROPIC_MAX_RETRIES=',
+        'ANTHROPIC_FALLBACK_MODELS' => '# ANTHROPIC_FALLBACK_MODELS=',
     ];
 
     protected $signature = 'anthropic:install';

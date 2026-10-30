@@ -80,6 +80,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Refusal Fallback
+    |--------------------------------------------------------------------------
+    |
+    | Model names to send a refused Messages request to, in order, with the
+    | refusal's fallback credit so the retry isn't billed for new cache
+    | writes. Each model must be one the refused model allows as a fallback,
+    | such as claude-opus-4-8 for Claude Fable 5, and the list applies to
+    | every model the app calls. Streamed requests are left alone, and a
+    | request that sets `fallbacks` throws. Empty turns it off.
+    |
+    | Example: ANTHROPIC_FALLBACK_MODELS=claude-opus-5,claude-opus-4-8
+    */
+
+    'fallback_models' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('ANTHROPIC_FALLBACK_MODELS', ''))
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
     | HTTP Middleware
     |--------------------------------------------------------------------------
     |

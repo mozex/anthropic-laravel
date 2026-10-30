@@ -6,6 +6,7 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\ServiceProvider;
+use Anthropic\Middleware\RefusalFallbackMiddleware;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
@@ -278,6 +279,7 @@ it('reads the new keys from their environment variables', function () {
         'ANTHROPIC_WORKSPACE_ID' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
         'ANTHROPIC_CONNECT_TIMEOUT' => '5',
         'ANTHROPIC_MAX_RETRIES' => '2',
+        'ANTHROPIC_FALLBACK_MODELS' => 'claude-opus-5, claude-opus-4-8',
     ]);
 
     expect($config)->toMatchArray([
@@ -285,6 +287,7 @@ it('reads the new keys from their environment variables', function () {
         'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
         'connect_timeout' => '5',
         'max_retries' => '2',
+        'fallback_models' => ['claude-opus-5', 'claude-opus-4-8'],
         'http' => ['middleware' => []],
         'headers' => [],
     ]);
@@ -311,6 +314,68 @@ it('retries as many times as the config says', function (mixed $maxRetries, int 
     'not a number' => ['many', 0],
     'not positive' => ['-1', 0],
 ]);
+
+it('builds the fallback chain from the config, with no state shared between requests', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['api_key' => 'test', 'fallback_models' => ['claude-opus-4-8']],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $middleware = clientMiddleware($app->get(Client::class));
+    $fallback = (new ReflectionFunction($middleware[0]))->getClosureThis();
+
+    expect($middleware)->toHaveCount(1)
+        ->and((new ReflectionProperty(RefusalFallbackMiddleware::class, 'chain'))->getValue($fallback))->toBe([['model' => 'claude-opus-4-8']])
+        // a worker's singleton would otherwise pin every user to a fallback after one refusal
+        ->and((new ReflectionProperty(RefusalFallbackMiddleware::class, 'state'))->getValue($fallback))->toBeNull();
+});
+
+it('adds no fallback when the list is empty or missing', function (array $config) {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository(['anthropic' => ['api_key' => 'test', ...$config]]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(clientMiddleware($app->get(Client::class)))->toBe([]);
+})->with([
+    'missing' => [[]],
+    'empty' => [['fallback_models' => []]],
+    'blank' => [['fallback_models' => ' , ']],
+    'blank names in an array' => [['fallback_models' => ['  ', '']]],
+]);
+
+it('trims the names of a list written by hand', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['api_key' => 'test', 'fallback_models' => [' claude-opus-4-8 ']],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $fallback = (new ReflectionFunction(clientMiddleware($app->get(Client::class))[0]))->getClosureThis();
+
+    expect((new ReflectionProperty(RefusalFallbackMiddleware::class, 'chain'))->getValue($fallback))->toBe([['model' => 'claude-opus-4-8']]);
+});
+
+it('reads a comma-separated string as the list', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['api_key' => 'test', 'fallback_models' => 'claude-opus-5, claude-opus-4-8'],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    $fallback = (new ReflectionFunction(clientMiddleware($app->get(Client::class))[0]))->getClosureThis();
+
+    expect((new ReflectionProperty(RefusalFallbackMiddleware::class, 'chain'))->getValue($fallback))
+        ->toBe([['model' => 'claude-opus-5'], ['model' => 'claude-opus-4-8']]);
+});
 
 it('pushes the configured guzzle middleware onto the stack', function (array|string $configured) {
     $app = app();
@@ -408,6 +473,18 @@ function clientGuzzle(Client $client): GuzzleHttp\Client
     $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
 
     return (new ReflectionProperty($transporter, 'client'))->getValue($transporter);
+}
+
+/**
+ * Extracts the middleware a resolved Client runs around each request via reflection.
+ *
+ * @return list<Closure>
+ */
+function clientMiddleware(Client $client): array
+{
+    $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
+
+    return (new ReflectionProperty($transporter, 'middleware'))->getValue($transporter);
 }
 
 /**
