@@ -46,6 +46,22 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 }
             }
 
+            // A blank value, such as an empty ANTHROPIC_API_VERSION= line in .env, keeps the client's default.
+            $apiVersion = config('anthropic.api_version');
+
+            if (is_string($apiVersion) && trim($apiVersion) !== '') {
+                $factory = $factory->withApiVersion($apiVersion);
+            }
+
+            $baseUrl = config('anthropic.base_url');
+
+            if (is_string($baseUrl) && trim($baseUrl) !== '') {
+                // ANTHROPIC_BASE_URL leaves out the API's /v1, as the official SDKs read it; the client wants it included.
+                $baseUrl = rtrim(trim($baseUrl), '/');
+
+                $factory = $factory->withBaseUri(str_ends_with($baseUrl, '/v1') ? $baseUrl : $baseUrl.'/v1');
+            }
+
             return $factory->make();
         });
 

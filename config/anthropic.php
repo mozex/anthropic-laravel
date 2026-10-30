@@ -47,4 +47,34 @@ return [
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
     ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Version
+    |--------------------------------------------------------------------------
+    |
+    | The version sent in the `anthropic-version` header. Leave it empty to
+    | use 2023-06-01. Version 2026-10-21 rejects some requests the older one
+    | accepts, such as any that sets `temperature`, `top_p` or `top_k`, so
+    | read the migration guide before you switch:
+    | https://platform.claude.com/docs/en/api/migration-2026-10-21
+    */
+
+    'api_version' => env('ANTHROPIC_API_VERSION'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Base URL
+    |--------------------------------------------------------------------------
+    |
+    | Point the client at a proxy or gateway in front of the API. Leave it
+    | empty to use https://api.anthropic.com. /v1 is added to this URL, as
+    | the official Anthropic SDKs do, so a gateway's documented
+    | ANTHROPIC_BASE_URL works as it is. A URL that already ends in /v1 is
+    | used as it is. A value exported in the shell that starts artisan, a
+    | queue worker or `php artisan serve` wins over .env, and that host
+    | receives your API key.
+    */
+
+    'base_url' => env('ANTHROPIC_BASE_URL'),
 ];

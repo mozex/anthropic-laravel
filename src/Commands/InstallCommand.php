@@ -21,6 +21,16 @@ class InstallCommand extends Command
         'Mozex' => 'https://github.com/sponsors/mozex',
     ];
 
+    /**
+     * The optional keys go in commented out: an empty line would set them to an
+     * empty string, for other packages reading the same names too.
+     */
+    private const ENV_LINES = [
+        'ANTHROPIC_API_KEY' => 'ANTHROPIC_API_KEY=',
+        'ANTHROPIC_API_VERSION' => '# ANTHROPIC_API_VERSION=',
+        'ANTHROPIC_BASE_URL' => '# ANTHROPIC_BASE_URL=',
+    ];
+
     protected $signature = 'anthropic:install';
 
     protected $description = 'Prepares the Anthropic client for use.';
@@ -56,10 +66,16 @@ class InstallCommand extends Command
     private function copyConfig(): void
     {
         if (file_exists(config_path('anthropic.php'))) {
+            $missingKeys = $this->keysMissingFromPublishedConfig();
+
             View::render('components.two-column-detail', [
                 'left' => 'config/anthropic.php',
-                'right' => 'File already exists.',
+                'right' => $missingKeys === [] ? 'File already exists.' : 'File already exists, without '.implode(', ', $missingKeys).'.',
             ]);
+
+            if ($missingKeys !== []) {
+                $this->line(' Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php. Until then, their .env variables do nothing.');
+            }
 
             return;
         }
@@ -91,21 +107,46 @@ class InstallCommand extends Command
             return;
         }
 
-        if (str_contains($fileContent, 'ANTHROPIC_API_KEY')) {
+        // Each key on its own, so an app installed before a key existed gets it on the next run.
+        $missingLines = array_filter(
+            self::ENV_LINES,
+            static fn (string $key): bool => preg_match('/^[ \t]*(?:#+[ \t]*)?(?:export[ \t]+)?(["\']?)'.$key.'\1[ \t]*=/m', $fileContent) !== 1,
+            ARRAY_FILTER_USE_KEY,
+        );
+
+        if ($missingLines === []) {
             View::render('components.two-column-detail', [
                 'left' => $envFile,
-                'right' => 'Variable already exists.',
+                'right' => 'Variables already exist.',
             ]);
 
             return;
         }
 
-        file_put_contents(base_path($envFile), PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL, FILE_APPEND);
+        file_put_contents(base_path($envFile), PHP_EOL.implode(PHP_EOL, $missingLines).PHP_EOL, FILE_APPEND);
 
         View::render('components.two-column-detail', [
             'left' => $envFile,
-            'right' => 'ANTHROPIC_API_KEY variable added.',
+            'right' => implode(', ', array_keys($missingLines)).' added.',
         ]);
+    }
+
+    /**
+     * The provider merges no defaults, so a key added to the package's config
+     * after the app published its copy stays unset until the user adds it.
+     *
+     * @return list<array-key>
+     */
+    private function keysMissingFromPublishedConfig(): array
+    {
+        $published = require config_path('anthropic.php');
+        $current = require __DIR__.'/../../config/anthropic.php';
+
+        if (! is_array($published) || ! is_array($current)) {
+            return [];
+        }
+
+        return array_keys(array_diff_key($current, $published));
     }
 
     /**

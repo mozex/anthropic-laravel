@@ -14,7 +14,9 @@ const STAR_QUESTION = ' <options=bold>Would you like to show some love by starri
 beforeEach(function () {
     Process::fake();
 
-    $this->envExample = file_get_contents(base_path('.env.example'));
+    // without lines a killed run may have left in the skeleton's file
+    $this->envExample = preg_replace('/^\s*[^\r\n]*ANTHROPIC_[^\r\n]*\R?/m', '', (string) file_get_contents(base_path('.env.example')));
+    file_put_contents(base_path('.env.example'), $this->envExample);
 
     @unlink(config_path('anthropic.php'));
 });
@@ -39,6 +41,87 @@ it('publishes the config and adds the api key variable', function () {
 
     expect(config_path('anthropic.php'))->toBeFile()
         ->and(file_get_contents(base_path('.env.example')))->toContain('ANTHROPIC_API_KEY=');
+});
+
+it('adds the api version and base url variables commented out', function () {
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL added.')
+        ->assertSuccessful();
+
+    expect(file_get_contents(base_path('.env.example')))
+        ->toEndWith(PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL);
+});
+
+it('adds only the variables an env file lacks', function () {
+    file_put_contents(base_path('.env.example'), $this->envExample.PHP_EOL.'ANTHROPIC_API_KEY=sk-ant-test'.PHP_EOL.'ANTHROPIC_API_VERSION=2026-10-21'.PHP_EOL);
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('ANTHROPIC_BASE_URL added.')
+        ->assertSuccessful();
+
+    $envExample = (string) file_get_contents(base_path('.env.example'));
+
+    expect(substr_count($envExample, 'ANTHROPIC_API_KEY'))->toBe(1)
+        ->and(substr_count($envExample, 'ANTHROPIC_API_VERSION'))->toBe(1)
+        ->and($envExample)->toContain('ANTHROPIC_API_KEY=sk-ant-test')
+        ->and($envExample)->toEndWith(PHP_EOL.'# ANTHROPIC_BASE_URL='.PHP_EOL);
+});
+
+it('adds a key whose name only appears inside another name or a value', function () {
+    file_put_contents(base_path('.env.example'), $this->envExample.PHP_EOL.'MY_ANTHROPIC_API_KEY=x'.PHP_EOL.'PROXY=${ANTHROPIC_BASE_URL}'.PHP_EOL);
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('ANTHROPIC_API_KEY, ANTHROPIC_API_VERSION, ANTHROPIC_BASE_URL added.')
+        ->assertSuccessful();
+});
+
+it('counts quoted and commented-out export lines as present', function () {
+    $quoted = $this->envExample.PHP_EOL.'"ANTHROPIC_API_KEY"=sk-ant-test'.PHP_EOL.'# export ANTHROPIC_API_VERSION='.PHP_EOL.'## ANTHROPIC_BASE_URL='.PHP_EOL;
+
+    file_put_contents(base_path('.env.example'), $quoted);
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('Variables already exist.')
+        ->assertSuccessful();
+
+    expect(file_get_contents(base_path('.env.example')))->toBe($quoted);
+});
+
+it('names the keys a config published by an older release lacks', function () {
+    file_put_contents(config_path('anthropic.php'), "<?php\n\nreturn ['api_key' => null, 'request_timeout' => 30, 'beta' => []];\n");
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('File already exists, without api_version, base_url.')
+        ->expectsOutputToContain('Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php.')
+        ->assertSuccessful();
+});
+
+it('says nothing more when the published config has every key', function () {
+    $this->artisan('vendor:publish', ['--tag' => 'anthropic-config'])->assertSuccessful();
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('File already exists.')
+        ->doesntExpectOutputToContain('Copy them into')
+        ->assertSuccessful();
+});
+
+it('leaves an env file that has every variable as it is', function () {
+    $complete = $this->envExample.PHP_EOL.'ANTHROPIC_API_KEY='.PHP_EOL.'# ANTHROPIC_API_VERSION='.PHP_EOL.'export ANTHROPIC_BASE_URL=https://gateway.example.com'.PHP_EOL;
+
+    file_put_contents(base_path('.env.example'), $complete);
+
+    $this->artisan('anthropic:install')
+        ->expectsConfirmation(STAR_QUESTION, 'no')
+        ->expectsOutputToContain('Variables already exist.')
+        ->assertSuccessful();
+
+    expect(file_get_contents(base_path('.env.example')))->toBe($complete);
 });
 
 it('opens the repository when the user agrees to star it', function () {
