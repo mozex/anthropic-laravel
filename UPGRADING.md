@@ -1,5 +1,15 @@
 # Upgrading
 
+## To 1.13.0
+
+This release requires `mozex/anthropic-php` 1.13. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1130) as well.
+
+### An Empty Anthropic::fake() Answers Every Call
+
+**Likelihood Of Impact: Low**
+
+`Anthropic::fake()` with no responses used to throw on the first call. It now answers each call with its method's default fake until you queue a response. A test that relied on the throw adds `->preventStrayRequests()`. See the client's upgrade notes for the rest of the fake's changes.
+
 ## To 1.12.0
 
 This release requires `mozex/anthropic-php` 1.12. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1120) as well.

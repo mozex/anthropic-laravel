@@ -34,6 +34,18 @@ use Throwable;
  * @method static \Anthropic\Contracts\ClientContract compliance()
  * @method static \Anthropic\Laravel\AnthropicManager extend(string $name, \Closure $callback)
  * @method static \Anthropic\Laravel\AnthropicManager forgetConnection(?string $name = null)
+ * @method static void assertSent(string $resource, callable|int|null $callback = null)
+ * @method static void assertSentTimes(string $resource, int $times, ?callable $callback = null)
+ * @method static void assertSentInOrder(array<int, string|array{0: string, 1: string}|\Closure> $expected)
+ * @method static void assertNotSent(string $resource, callable|int|null $callback = null)
+ * @method static void assertNothingSent()
+ * @method static void assertSentWithOptions(string $resource, array<string, mixed> $options)
+ * @method static void assertSentOn(string $connection, string $resource, callable|int|null $callback = null)
+ * @method static void assertNotSentOn(string $connection, string $resource, ?callable $callback = null)
+ * @method static array<int, \Anthropic\Testing\Requests\TestRequest> sent(?string $resource = null, ?callable $callback = null)
+ * @method static \Anthropic\Laravel\Testing\AnthropicFake respondTo(string|array{0: string, 1: string}|\Closure $match, mixed $response)
+ * @method static \Anthropic\Laravel\Testing\AnthropicFake preventStrayRequests(bool $prevent = true)
+ * @method static void addResponses(array<array-key, mixed> $responses)
  *
  * @see AnthropicManager
  */

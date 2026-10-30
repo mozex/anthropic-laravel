@@ -658,15 +658,15 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
 });
 ```
 
-Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass exceptions as fakes to test error branches, using the subclass the client would throw (`new \Anthropic\Exceptions\OverloadedException([...], new \GuzzleHttp\Psr7\Response(529))`): a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`. An int status in place of the response is deprecated. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
+Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass exceptions as fakes to test error branches, built with the subclass's `fake()` (`\Anthropic\Exceptions\OverloadedException::fake()`; `RateLimitException::fake(headers: ['retry-after' => '30'])`; `RateLimitException::fake(['details' => ['error_code' => 'enforced_spend_limit_reached']])`; `ConnectionException::fake()`, `TimeoutException::fake()`): a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
 
-Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertNotSent`, `assertNothingSent`. Also resource-level: `Anthropic::messages()->assertSent(...)`.
+Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertSentTimes($resource, $n, $callback)`, `assertSentInOrder([[Models::class, 'retrieve'], Messages::class])` (every call, in order), `assertNotSent`, `assertNothingSent`, `sent($resource)` (the `TestRequest`s). Also resource-level: `Anthropic::messages()->assertSent(...)`. Under Pest: `expect($fake)->toHaveSent(...)` on the fake `Anthropic::fake()` returned. An `Anthropic::fake()` with no responses answers every call with its method's default fake; `->preventStrayRequests()` makes an unanswered call throw; `->respondTo([Models::class, 'retrieve'], RetrieveResponse::fake())` answers matching calls ahead of the queue (a closure for a stream).
 
 Test queued jobs with `$job::dispatchSync()` plus `Anthropic::fake()`.
 
 `iterate()` on the fake takes one queued list fake per page: `ListResponse::fake(['has_more' => true, 'last_id' => '...'])`, then `ListResponse::fake()`, whose `has_more` is false.
 
-Running out of fakes throws "No fake responses left." Use `$fake->addResponses([...])` to add mid-test.
+Running out of queued fakes throws "No fake responses left", naming the call; a queued response that doesn't fit the method throws too. Use `$fake->addResponses([...])` to add mid-test.
 
 For the full list of fake response classes (`Messages\CountTokensResponse`, `Batches\BatchResultResponse`, `Models\ListResponse`, etc.), the in-memory SSE stream helper, and recursive-merge semantics for nested overrides, fetch `/mozex/anthropic-laravel` via Context7 or the docs site.
 

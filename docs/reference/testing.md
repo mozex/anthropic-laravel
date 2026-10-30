@@ -43,6 +43,23 @@ class SummarizeArticle
 
 Type-hint `ClientContract` rather than `Anthropic\Client`. The fake isn't a `Client`, so resolving a dependency typed with the class after `Anthropic::fake()` throws a `TypeError`.
 
+`Anthropic::fake()` with no responses answers every call with its method's default fake, so a test of a job that only needs the call to succeed queues nothing. Once you queue a response, a call with none left throws. To make an unanswered call throw even with nothing queued, call `preventStrayRequests()`:
+
+```php
+Anthropic::fake()->preventStrayRequests();
+```
+
+To answer by what was called rather than in order, use `respondTo()` with a resource, a resource and method pair, or a closure:
+
+```php
+use Anthropic\Resources\Models;
+use Anthropic\Responses\Models\RetrieveResponse;
+
+Anthropic::fake()->respondTo([Models::class, 'retrieve'], RetrieveResponse::fake());
+```
+
+A responder answers every matching call. A stream is read only once, so pass a closure that builds a fresh one each time, as the [PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/testing#answering-by-resource-method-or-closure) show.
+
 ## Available fake responses
 
 Every response class has a `fake()` method with sensible defaults:
@@ -135,6 +152,31 @@ Anthropic::assertNotSent(\Anthropic\Resources\Batches::class);
 Anthropic::assertNothingSent();
 ```
 
+### assertSentTimes and assertSentInOrder
+
+```php
+Anthropic::assertSentTimes(Messages::class, 2);
+
+Anthropic::assertSentInOrder([
+    [\Anthropic\Resources\Models::class, 'retrieve'],
+    [Messages::class, 'create'],
+]);
+```
+
+`assertSentInOrder()` checks every request that was sent, so an extra call anywhere fails it; a failure lists the calls. `Anthropic::sent(Messages::class)` returns a resource's requests, so you can check their arguments yourself.
+
+Under Pest, keep the fake `Anthropic::fake()` returns and pass it to `expect()`, since calling `Anthropic::fake()` again starts an empty one:
+
+```php
+$fake = Anthropic::fake();
+
+// run your code...
+
+expect($fake)->toHaveSent(Messages::class)->toHaveSentOn('support', Messages::class);
+```
+
+`toHaveSentTimes()`, `toHaveSentInOrder()` and `toHaveSentNothing()` work the same way.
+
 ### Resource-level assertions
 
 You can also assert on the resource directly:
@@ -205,24 +247,18 @@ it('processes a Claude job', function () {
 
 ## Testing errors
 
-Pass an exception as a fake response. It will be thrown when the matching request runs:
+Queue an exception. It's thrown when the matching request runs, and each API exception's `fake()` builds it as the client would, with its status, type, message and `request-id` on a real PSR-7 response:
 
 ```php
 use Anthropic\Exceptions\OverloadedException;
-use GuzzleHttp\Psr7\Response;
 
-Anthropic::fake([
-    new OverloadedException([
-        'message' => 'Overloaded',
-        'type' => 'overloaded_error',
-    ], new Response(529)),
-]);
+Anthropic::fake([OverloadedException::fake()]);
 
 // This throws OverloadedException
 Anthropic::messages()->create([...]);
 ```
 
-Fake the class the client would throw for that status: a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`. Pass a PSR-7 response as the second argument, as the client does, so the code under test can read headers from `$e->response`. A job that releases on a 429 can be tested with `new RateLimitException([...], new Response(429, ['retry-after' => '30']))`. An `int` status code in place of the response is deprecated.
+A job that releases on a 429 can be tested with `\Anthropic\Exceptions\RateLimitException::fake(headers: ['retry-after' => '30'])`, and one that fails on the monthly spend cap with `RateLimitException::fake(['details' => ['error_code' => 'enforced_spend_limit_reached']])`. `\Anthropic\Exceptions\ConnectionException::fake()` and `TimeoutException::fake()` stand for a request that got no answer. Fake the class the client would throw: a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`.
 
 ## Testing streamed responses
 
@@ -316,7 +352,7 @@ $fake->addResponses([
 // Run code that uses the second response...
 ```
 
-If your code makes more requests than you have fake responses, the client throws a "No fake responses left" exception. That's usually a sign that you need to add more fakes or that your code is making unexpected calls.
+If your code makes more requests than you have fake responses, the next call throws "No fake responses left.", naming the call. That's usually a sign that you need to add more fakes or that your code is making unexpected calls.
 
 ---
 
