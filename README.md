@@ -142,7 +142,7 @@ Route::get('/chat', fn () => Anthropic::messages()->createStreamed([
 ])->toEventStream());
 ```
 
-`toTextStream()` serves `useStream`, and `toVercelStream()` the AI SDK's `useChat`. In PHP, `$stream->text()` yields the text deltas and `$stream->finalMessage()` returns the whole response.
+`toTextStream()` serves `useStream`, and `toVercelStream()` the AI SDK's `useChat`. From a queued job, `broadcastTo($channel)` sends the text over Reverb or Pusher, and a Livewire component gets `InteractsWithClaudeStreams`. In PHP, `$stream->text()` yields the text deltas and `$stream->finalMessage()` returns the whole response.
 
 ### Tool Use
 

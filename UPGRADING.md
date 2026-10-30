@@ -4,6 +4,12 @@
 
 This release requires `mozex/anthropic-php` 1.15. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1150) as well.
 
+### Streams Fall Back Too
+
+**Likelihood Of Impact: Low**
+
+With `ANTHROPIC_FALLBACK_MODELS` set, a refused stream now goes on with the next model's events, behind a `fallback` block, where it used to come back refused. The middleware also takes every `fallback` block out of the history you send back, one in the middle of a turn included.
+
 ### Anthropic::messages() Returns The Package's Own Resource
 
 **Likelihood Of Impact: Low**

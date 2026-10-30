@@ -12,3 +12,7 @@ parameters:
         -
             identifier: larastan.noEnvCallsOutsideOfConfig
             path: config/anthropic.php
+        # A Livewire component uses it, and the package ships none; its tests run it against stubs of Livewire 3 and 4.
+        -
+            identifier: trait.unused
+            path: src/Livewire/InteractsWithClaudeStreams.php

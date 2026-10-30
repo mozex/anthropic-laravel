@@ -5,21 +5,25 @@ declare(strict_types=1);
 namespace Anthropic\Laravel\Responses;
 
 use Anthropic\Exceptions\ErrorException;
+use Anthropic\Responses\Messages\CreateResponse;
 use Anthropic\Responses\Messages\CreateStreamedResponse;
 use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
 use ArrayObject;
 use Generator;
+use Illuminate\Broadcasting\Channel;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Date;
+use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
  * A Messages stream with Laravel responses over it: `toEventStream()` for `useEventStream`, `toTextStream()` for
- * `useStream` and `toVercelStream()` for the AI SDK's `useChat`. Every stream `Anthropic::messages()->createStreamed()`
- * returns is one, a fake's included (an injected `ClientContract`'s isn't: `as()` makes one). Each reports a failure,
- * and stops reading when the browser goes away where PHP can tell: under PHP-FPM, not under Octane's Swoole or
- * RoadRunner.
+ * `useStream` and `toVercelStream()` for the AI SDK's `useChat`, and `broadcastTo()` for a queued job's channel. Every
+ * stream `Anthropic::messages()->createStreamed()` returns is one, a fake's included (an injected `ClientContract`'s
+ * isn't: `as()` makes one). The three responses report a failure, and stop reading when the browser goes away where
+ * PHP can tell: under PHP-FPM, not under Octane's Swoole or RoadRunner.
  *
  * @extends MessagesStreamResponse<CreateStreamedResponse>
  */
@@ -145,6 +149,115 @@ class StreamResponse extends MessagesStreamResponse
             'X-Accel-Buffering' => 'no',
             'x-vercel-ai-ui-message-stream' => 'v1',
         ]);
+    }
+
+    /**
+     * Broadcasts the text as it streams, from a queued job, as anonymous events on the channels:
+     *
+     * - `claude.delta`, with its `text` and `sequence`. The deltas go out together once `$everyMs` milliseconds have
+     *   passed (checked as each event arrives), and when anything but text comes, so text before a tool call isn't held
+     *   back. Each payload's data stays under `$maxBytes` as Reverb receives it (encoded twice), cut between characters;
+     *   Reverb's own limit covers the whole request, headers included, so keep it well under 10,000.
+     * - `claude.fallback`, with `from` and `to`, when a refused stream goes on with a fallback model.
+     * - `claude.done`, with the message's `id` and `stop_reason`. Instead, when the stream fails or ends before the
+     *   message does, `claude.error`, with a `type` and `message`, and the exception is thrown on for the job to retry.
+     *
+     * Each goes out with `sendNow()`, so it isn't queued again. A broadcaster that fails is reported, the deltas
+     * after it skipped and the stream still read to its end, since the call is billed either way; the closing event is
+     * still tried. Tool calls, their results and the whole message aren't sent: save the message this returns, for the
+     * browser to fetch once `claude.done` arrives.
+     *
+     * @param  Channel|string|array<int, Channel|string>  $channels
+     */
+    public function broadcastTo(Channel|string|array $channels, int $everyMs = 50, int $maxBytes = 6000): CreateResponse
+    {
+        if ($everyMs < 0 || $maxBytes < 256) {
+            throw new InvalidArgumentException("broadcastTo() takes an interval of 0 ms or more and at least 256 bytes a payload: {$everyMs} ms and {$maxBytes} bytes given.");
+        }
+
+        $buffer = '';
+        $sequence = 0;
+        $flushed = Date::now()->getTimestampMs();
+        $broken = false;
+
+        // After a failure the deltas are skipped, but the closing event is still tried once, so the browser stops waiting.
+        $send = function (string $name, array $payload, bool $closing = false) use ($channels, &$broken): void {
+            if ($broken && ! $closing) {
+                return;
+            }
+
+            try {
+                Broadcast::on($channels)->as($name)->with($payload)->sendNow();
+            } catch (Throwable $e) {
+                $broken = true;
+                report($e);
+            }
+        };
+
+        $flush = function () use (&$buffer, &$sequence, &$flushed, $send, $maxBytes): void {
+            while ($buffer !== '') {
+                $text = self::fitting($buffer, $maxBytes, $sequence);
+                $buffer = substr($buffer, strlen($text));
+
+                $send('claude.delta', ['text' => $text, 'sequence' => $sequence++]);
+            }
+
+            $flushed = Date::now()->getTimestampMs();
+        };
+
+        try {
+            foreach ($this as $event) {
+                $isText = $event->type === 'content_block_delta' && $event->delta->type === 'text_delta';
+
+                if ($isText) {
+                    $buffer .= (string) $event->delta->text;
+                }
+
+                if ($buffer !== '' && (! $isText || Date::now()->getTimestampMs() - $flushed >= $everyMs || strlen($buffer) >= $maxBytes)) {
+                    $flush();
+                }
+
+                if ($event->type === 'content_block_start' && $event->content_block_start->type === 'fallback') {
+                    $send('claude.fallback', ['from' => $event->content_block_start->from?->model, 'to' => $event->content_block_start->to?->model]);
+                }
+            }
+
+            $flush();
+        } catch (Throwable $e) {
+            $flush();
+            $send('claude.error', self::error($e), true);
+
+            throw $e;
+        }
+
+        if (! $this->completed()) {
+            $send('claude.error', ['type' => 'error', 'message' => self::CUT_OFF], true);
+
+            throw new RuntimeException(self::CUT_OFF);
+        }
+
+        $message = $this->finalMessage();
+        $send('claude.done', ['id' => $message->id, 'stop_reason' => $message->stop_reason], true);
+
+        return $message;
+    }
+
+    /**
+     * The longest start of the text whose payload fits in the bytes as Reverb receives it (Laravel's broadcaster encodes
+     * the data, then the request again), cut between characters.
+     */
+    private static function fitting(string $text, int $maxBytes, int $sequence): string
+    {
+        $bytes = $maxBytes;
+
+        do {
+            $chunk = mb_strcut($text, 0, $bytes, 'UTF-8');
+            $size = strlen((string) json_encode((string) json_encode(['text' => $chunk, 'sequence' => $sequence])));
+            $bytes = (int) floor($bytes * $maxBytes / max($size, 1)) - 1;
+        } while ($size > $maxBytes && $bytes > 0);
+
+        // A single character too big to fit goes alone, rather than never.
+        return $chunk !== '' ? $chunk : mb_substr($text, 0, 1, 'UTF-8');
     }
 
     /**

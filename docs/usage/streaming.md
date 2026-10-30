@@ -77,7 +77,7 @@ const { message } = useEventStream(`/conversations/${id}/reply`, { glue: '' });
 
 `toEventStream()` puts every line of a delta on its own `data:` line, so a newline in Claude's answer arrives as a newline. If the stream fails, or ends before Claude's message does, that's reported and an `error` event goes out. It carries the API's error type and message, never another exception's message. The hook passes that event to your `onError` (its JSON in `event.data`) and closes, so `onComplete` doesn't run. The `</stream>` marker follows, unless PHP itself dies first. That matters: a plain `EventSource` reconnects when a stream just stops, which runs the route again and bills the call twice. `toTextStream()` has no way to say it failed: it just ends.
 
-None of the three says Claude refused: the text stops, and the reply's `stop_reason` is `refusal`. Check it in `onMessage()` and mark the reply in your database, so the UI can drop it.
+None of the three says Claude refused: the text stops, and the reply's `stop_reason` is `refusal`. Check it in `onMessage()` and mark the reply in your database, so the UI can drop it. With [`ANTHROPIC_FALLBACK_MODELS`](./messages.md) set, a refused stream goes on with the fallback instead, usually from the refused model's last word. When the API doesn't let the fallback carry on, its answer starts over after the partial one, and the browser gets both. The stream doesn't say which happened.
 
 `toVercelStream()` sends text, reasoning, your own tool calls and web search sources, each page once. Server tools run on Anthropic's side, so their calls aren't sent. It takes an optional message ID, and the API's message ID is the default.
 
@@ -85,66 +85,100 @@ While events arrive that the browser isn't sent (shown thinking, a tool's input,
 
 Under PHP-FPM, all three stop reading when the browser goes away, and a reply cut off that way never reaches `onMessage()`. Under Octane with Swoole or RoadRunner they don't. Swoole streams the reply but can't tell the browser left, so the reply runs to the end and is billed in full. RoadRunner holds a `StreamedResponse` until it's done, so the browser gets the reply in one piece. Raise Octane's `max_execution_time` if a long thinking stream can outlast its default 30 seconds.
 
-## Streaming with Broadcasting
+## Broadcasting from a queued job
 
-For apps with real-time UIs (Livewire, Inertia, Echo), push each chunk as a broadcast event:
+For a long answer, or a UI on Echo, stream from a queued job and broadcast the text as it comes:
 
 ```php
-class AskClaudeJob implements ShouldQueue
+use Anthropic\Laravel\Facades\Anthropic;
+use Illuminate\Broadcasting\PrivateChannel;
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class AskClaude implements ShouldQueue
 {
     public function handle(): void
     {
-        $stream = Anthropic::messages()->createStreamed([
+        $message = Anthropic::messages()->createStreamed([
             'model' => 'claude-sonnet-5-5',
             'max_tokens' => 4096,
-            'messages' => $this->messages,
+            'messages' => $this->conversation->messages()->orderBy('id')->get(['role', 'content'])->toArray(),
+        ])->broadcastTo(new PrivateChannel("chat.{$this->conversation->id}"));
+
+        $this->conversation->messages()->create([
+            'role' => 'assistant',
+            'content' => $message->toArray()['content'],
         ]);
-
-        $fullText = '';
-
-        foreach ($stream as $response) {
-            if ($response->type === 'content_block_delta'
-                && $response->delta->type === 'text_delta') {
-                $fullText .= $response->delta->text;
-                ChunkReceived::dispatch($this->conversationId, $response->delta->text);
-            }
-        }
-
-        $this->message->update(['content' => $fullText, 'status' => 'finished']);
     }
 }
 ```
 
+`broadcastTo()` sends these events:
+
+| Event | Payload | When |
+|-------|---------|------|
+| `claude.delta` | `text`, `sequence` | The text since the last one, every 50 milliseconds (`everyMs:`), and before anything but text, such as a tool call |
+| `claude.fallback` | `from`, `to` | A refused stream goes on with a fallback model |
+| `claude.done` | `id`, `stop_reason` | The message ended |
+| `claude.error` | `type`, `message` | The stream failed or was cut off. The exception is then thrown on, for the job to retry |
+
+So a fast stream isn't a WebSocket frame per token. Each event's data stays under 6,000 bytes as Reverb receives it (`maxBytes:`), and a long run of text is cut between characters. Reverb's 10 KB limit covers the whole request, headers and channel names included, so keep `maxBytes` well under that. Every event goes out with `sendNow()`, so it isn't queued again. A broadcaster that fails is reported, the deltas after it are skipped and the stream is still read to its end, since the call is billed either way. The closing event is still tried. Tool calls and the whole message aren't broadcast: save the message `broadcastTo()` returns, and have the browser fetch it once `claude.done` arrives.
+
+```js
+useEcho(`chat.${id}`, ['.claude.delta', '.claude.fallback', '.claude.done', '.claude.error'], (event) => {
+    // event.text and event.sequence; a sequence of 0 starts the reply over, as a retried job does
+});
+```
+
+The names start with a dot because they aren't event classes. The 50 milliseconds are checked as each event arrives, so a stretch where nothing arrives (Claude thinking with its thinking omitted) sends nothing until the next one. `broadcastTo()` reads the stream to its end. To stop one partway, iterate `$stream->text()` yourself and `break`, as below.
+
+## Livewire
+
+`InteractsWithClaudeStreams` streams the text into a `wire:stream` target and returns the whole text, to save:
+
+```php
+use Anthropic\Laravel\Facades\Anthropic;
+use Anthropic\Laravel\Livewire\InteractsWithClaudeStreams;
+use Livewire\Component;
+
+class Chat extends Component
+{
+    use InteractsWithClaudeStreams;
+
+    public string $answer = '';
+
+    public function ask(): void
+    {
+        $this->answer = $this->streamClaude(Anthropic::messages()->createStreamed([...]), to: 'answer');
+    }
+}
+```
+
+```blade
+<div wire:stream="answer">{{ $answer }}</div>
+```
+
+It calls Livewire's `stream()` with named arguments, the form Livewire 3 and 4 share. Its first update replaces what the element showed, so a second answer doesn't land on the first. With `replace: true`, every update holds the text so far instead of the new delta. Livewire's streaming doesn't work under Octane, and it holds a PHP-FPM worker for the whole reply, so for long answers broadcast from a queued job instead.
+
 ## Refusals while streaming
 
-A refusal can come after part of the answer has already streamed. It arrives on the `message_delta` event, with `stop_reason` set to `'refusal'` and the reason in `delta->stop_details`. Treat the text you've streamed as incomplete, and tell the browser to drop it:
+A refusal can come after part of the answer has already streamed, with the reply's `stop_reason` set to `'refusal'` and the reason in `stop_details`. `claude.done` carries the stop reason, so the browser can drop the partial reply when it's `refusal`, and `claude.fallback` says a fallback model took over. In the job, check the message `broadcastTo()` returns:
 
 ```php
 use Illuminate\Support\Facades\Log;
 
-foreach ($stream as $response) {
-    if ($response->type === 'content_block_delta'
-        && $response->delta->type === 'text_delta') {
-        $fullText .= $response->delta->text;
-        ChunkReceived::dispatch($this->conversationId, $response->delta->text);
-    }
+$message = $stream->broadcastTo(new PrivateChannel("chat.{$this->conversation->id}"));
 
-    if ($response->type === 'message_delta'
-        && $response->delta->stop_reason === 'refusal') {
-        Log::warning('Claude refused mid-stream', [
-            'conversation_id' => $this->conversationId,
-            'category' => $response->delta->stop_details?->category,
-        ]);
+if ($message->stop_reason === 'refusal') {
+    Log::warning('Claude refused mid-stream', [
+        'conversation_id' => $this->conversation->id,
+        'category' => $message->stop_details?->category,
+    ]);
 
-        StreamRefused::dispatch($this->conversationId); // the UI clears the partial reply
-        $this->message->update(['content' => null, 'status' => 'refused']);
-
-        return;
-    }
+    return;
 }
 ```
 
-`StreamRefused` is your own broadcast event, like `ChunkReceived`. Before the user goes on, drop or rephrase the turn that caused the refusal: sending the same conversation again usually gets another one.
+Before the user goes on, drop or rephrase the turn that caused the refusal: sending the same conversation again usually gets another one. With `ANTHROPIC_FALLBACK_MODELS` set, a refused stream goes on with a fallback model instead (see [Messages](./messages.md)).
 
 ## Stopping a stream mid-generation
 

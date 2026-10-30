@@ -267,7 +267,7 @@ Where server-side fallback isn't available, list fallback models in `.env` and t
 ANTHROPIC_FALLBACK_MODELS=claude-opus-4-8
 ```
 
-The list applies to every model your app calls, and each fallback has to be one the refused model allows: Claude Opus 4.8 or Opus 5 after Claude Fable 5 or Opus 5.5, Claude Sonnet 5 after Claude Sonnet 5.5 (the [fallback credit guide](https://platform.claude.com/docs/en/build-with-claude/fallback-credit) has the full list). Don't combine it with `fallbacks`: with the variable set, a request that passes `fallbacks` throws, so pick one. Streamed requests are left alone, and one call can now take a request timeout per model it tries, so size a queued job's `$timeout` for the chain.
+The list applies to every model your app calls, and each fallback has to be one the refused model allows: Claude Opus 4.8 or Opus 5 after Claude Fable 5 or Opus 5.5, Claude Sonnet 5 after Claude Sonnet 5.5 (the [fallback credit guide](https://platform.claude.com/docs/en/build-with-claude/fallback-credit) has the full list). Don't combine it with `fallbacks`: with the variable set, a request that passes `fallbacks` throws, so pick one. A streamed request falls back too: the fallback's events go on in the same stream, behind a `fallback` block, and `finalMessage()` has the whole answer. One call can now take a request timeout per model it tries, so size a queued job's `$timeout` for the chain.
 
 Each request starts from the model you asked for. To keep a conversation on the model that answered, store it and ask for it next time:
 

@@ -100,8 +100,9 @@ return [
     | refusal's fallback credit so the retry isn't billed for new cache
     | writes. Each model must be one the refused model allows as a fallback,
     | such as claude-opus-4-8 for Claude Fable 5, and the list applies to
-    | every model the app calls. Streamed requests are left alone, and a
-    | request that sets `fallbacks` throws. Empty turns it off.
+    | every model the app calls. A refused stream goes on with the fallback
+    | in the same stream, and a request that sets `fallbacks` throws. Empty
+    | turns it off.
     |
     | Example: ANTHROPIC_FALLBACK_MODELS=claude-opus-5,claude-opus-4-8
     */
