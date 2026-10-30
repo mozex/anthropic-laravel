@@ -267,7 +267,7 @@ it('sets the connect timeout on the guzzle client', function (mixed $connectTime
     $transporter = (new ReflectionProperty($client, 'transporter'))->getValue($client);
     $guzzle = (new ReflectionProperty($transporter, 'client'))->getValue($transporter);
 
-    expect($guzzle->getConfig('timeout'))->toBe(60)
+    expect($guzzle->getConfig('timeout'))->toBe(60.0)
         ->and($guzzle->getConfig('connect_timeout'))->toBe($expected);
 })->with([
     'a number from .env' => ['5', 5.0],
@@ -317,6 +317,18 @@ it('retries as many times as the config says', function (mixed $maxRetries, int 
     'empty' => [null, 0],
     'blank from .env' => ['', 0],
 ]);
+
+it('takes an empty ANTHROPIC_REQUEST_TIMEOUT= line as the default 30 seconds', function () {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['api_key' => 'test', 'request_timeout' => ''],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(clientGuzzle($app->get(Client::class))->getConfig('timeout'))->toBe(30.0);
+});
 
 it('throws on a config value of the wrong type, naming the key', function (array $config, string $message) {
     $app = app();

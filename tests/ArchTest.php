@@ -57,6 +57,7 @@ arch('service providers')
         'Illuminate\Contracts\Container\Container',
         'Illuminate\Contracts\Events\Dispatcher',
         'Illuminate\Contracts\Foundation\Application',
+        'Illuminate\Foundation\Console\AboutCommand',
         'Illuminate\Queue\Events\Looping',
         'Illuminate\Support\ServiceProvider',
         'Anthropic\Laravel',

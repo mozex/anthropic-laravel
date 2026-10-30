@@ -6,6 +6,7 @@ namespace Anthropic\Laravel;
 
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
+use Anthropic\Laravel\Commands\DoctorCommand;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
@@ -51,6 +52,7 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
 
             $this->commands([
                 InstallCommand::class,
+                DoctorCommand::class,
             ]);
         }
     }

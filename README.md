@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
 [![Total Downloads](https://img.shields.io/packagist/dt/mozex/anthropic-laravel.svg?style=flat-square)](https://packagist.org/packages/mozex/anthropic-laravel)
 
-Laravel wrapper for [Anthropic PHP](https://github.com/mozex/anthropic-php), the community-maintained PHP SDK for the [Anthropic API](https://platform.claude.com/docs/en/about-claude/models/overview). Adds a Facade, a publishable config, an install command, and a testing integration that plugs into the service container.
+The Claude companion for Laravel. It puts the [Anthropic API](https://platform.claude.com/docs/en/about-claude/models/overview) behind an `Anthropic::` facade, the Claude-specific parts a provider-neutral package leaves out included: Message Batches, token counting, the rate-limit headers on every response, and refusal fallback with its fallback credit. Named connections, per-tenant keys, events for every request and one `Anthropic::fake()` for all of them come with it. It runs on [Anthropic PHP](https://github.com/mozex/anthropic-php), the community-maintained PHP SDK, and sits beside [laravel/ai](https://github.com/laravel/ai) without getting in its way.
 
 > **[Read the full documentation at mozex.dev](https://mozex.dev/docs/anthropic-laravel/v1)**: searchable docs, version requirements, detailed changelog, and more.
 
@@ -36,6 +36,7 @@ Laravel wrapper for [Anthropic PHP](https://github.com/mozex/anthropic-php), the
   - [Meta Information](https://mozex.dev/docs/anthropic-laravel/v1/reference/meta-information)
   - [Testing](https://mozex.dev/docs/anthropic-laravel/v1/reference/testing)
   - [Using alongside laravel/ai](https://mozex.dev/docs/anthropic-laravel/v1/reference/laravel-ai)
+  - [Diagnostics](https://mozex.dev/docs/anthropic-laravel/v1/reference/diagnostics)
 
 ## Support This Project
 
@@ -68,6 +69,12 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
     return $parameters['model'] === 'claude-sonnet-5-5';
 });
 ```
+
+**Named connections and tenant keys.** `Anthropic::connection('support')` gives a client of its own settings, `Anthropic::withApiKey($tenant->anthropic_key)` one for a key known only at runtime, and `Anthropic::organization()` the Admin API's. [See connections →](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration#connections)
+
+**Your logs, Telescope and Nightwatch see the calls.** Every request dispatches events without a credential in them, a logged API error carries its request ID, Context can carry the IDs into every log line, Telescope can record tagged entries, and Nightwatch picks the calls up on its own. [See the configuration docs →](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration#context)
+
+**`php artisan anthropic:doctor`.** Checks the key, one API call that spends no tokens, your queues' `retry_after` against the longest call, and your fallback models' lifecycle, and exits non-zero on a failure so CI can run it. [See diagnostics →](https://mozex.dev/docs/anthropic-laravel/v1/reference/diagnostics)
 
 **One artisan command to set up.** `php artisan anthropic:install` publishes the config file and adds `ANTHROPIC_API_KEY=` to your `.env`, with the optional variables commented out. You're ready to go.
 

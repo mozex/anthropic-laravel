@@ -3,7 +3,7 @@ title: Introduction
 weight: 0
 ---
 
-Anthropic Laravel is the Laravel wrapper for [Anthropic PHP](https://mozex.dev/docs/anthropic-php/v1), the community-maintained PHP SDK for the [Anthropic API](https://platform.claude.com/docs/en/about-claude/models/overview). It gives you a Laravel-native way to talk to Claude: a Facade, a publishable config, an install command, and a testing integration that plugs into the service container.
+Anthropic Laravel is the Claude companion for Laravel. It puts the [Anthropic API](https://platform.claude.com/docs/en/about-claude/models/overview) behind an `Anthropic::` facade, the Claude-specific parts a provider-neutral package leaves out included: Message Batches, token counting, the rate-limit headers on every response, and refusal fallback with its fallback credit. It runs on [Anthropic PHP](https://mozex.dev/docs/anthropic-php/v1), the community-maintained PHP SDK, and sits beside [laravel/ai](./reference/laravel-ai.md) without getting in its way.
 
 Under the hood, every request is handled by the underlying PHP package, so you get full access to every Anthropic API feature (messages, streaming, tool use, extended thinking, web search, code execution, citations, token counting, batches, and files) without the framework-agnostic boilerplate.
 
@@ -16,6 +16,10 @@ Under the hood, every request is handled by the underlying PHP package, so you g
 **Publishable config with env support.** Run `php artisan anthropic:install` once and you've got a `config/anthropic.php` file, an `ANTHROPIC_API_KEY` entry in `.env` (plus the optional settings, commented out), and you're ready to go.
 
 **`Anthropic::fake()` in your tests.** Swap the real client with a fake one, queue responses, and assert exactly which requests were sent. This pairs with Laravel's existing testing idioms (`Event::fake()`, `Queue::fake()`) so your test code stays consistent.
+
+**Connections, tenants and the Admin API.** Name connections in the config and reach them with `Anthropic::connection()`, build a client for a tenant's key with `Anthropic::withApiKey()`, and use `Anthropic::organization()` for the Admin API. One `Anthropic::fake()` answers all of them. See [Configuration](./reference/configuration.md#connections).
+
+**Built for production.** Events for every request, request IDs in your logs and error tracker, optional Context, Telescope and Nightwatch recording, and `php artisan anthropic:doctor` to catch a queue that would run a Claude call twice. See [Diagnostics](./reference/diagnostics.md).
 
 **Same-day support for new API features.** Parameters pass through to the API as-is. New content block types, new thinking modes, new tool versions all work the day Anthropic ships them. You don't wait for a package update.
 
@@ -132,3 +136,4 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Meta Information](./reference/meta-information.md): Rate limits, request IDs, token limits
 - [Testing](./reference/testing.md): `Anthropic::fake()`, mock responses, and assertions
 - [Using alongside laravel/ai](./reference/laravel-ai.md): One key for both, and what to reach for where
+- [Diagnostics](./reference/diagnostics.md): `anthropic:doctor`, the `about` section, and a health check that never calls the API

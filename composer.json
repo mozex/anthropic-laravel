@@ -1,11 +1,14 @@
 {
     "name": "mozex/anthropic-laravel",
-    "description": "Laravel integration for the Anthropic API: facade, config publishing, install command, testing fakes, messages, streaming, tool use, thinking, and batches.",
+    "description": "The Claude companion for Laravel: the Anthropic API behind a facade, with batches, token counting, files, refusal fallback, named connections, events and test fakes, beside laravel/ai.",
     "keywords": [
         "laravel",
         "php",
         "anthropic",
         "claude",
+        "laravel-ai",
+        "message-batches",
+        "token-counting",
         "sdk",
         "api",
         "client",

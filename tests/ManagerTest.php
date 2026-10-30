@@ -19,6 +19,7 @@ use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
 use Illuminate\Events\EventServiceProvider;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Http\Client\Request;
 use Illuminate\Queue\Events\Looping;
 use Illuminate\Support\Facades\Event;
@@ -251,7 +252,8 @@ test("cached connections are forgotten between a worker's jobs and Octane's requ
     'an Octane operation' => [fn () => event('Laravel\Octane\Contracts\OperationTerminated')],
 ]);
 
-test('a loop that never used the client never builds the manager', function () {
+test('a fresh app registers the about entry and the forgetting listeners, and a loop that never used the client never builds the manager', function () {
+    AboutCommand::flushState();
     $previous = Container::getInstance();
     $app = new Application(dirname(__DIR__));
     $app->instance('config', new Repository([]));
@@ -262,7 +264,9 @@ test('a loop that never used the client never builds the manager', function () {
 
     $app->make('events')->dispatch(new Looping('redis', 'default'));
 
-    expect($app->resolved(AnthropicManager::class))->toBeFalse();
+    expect($app->resolved(AnthropicManager::class))->toBeFalse()
+        ->and($app->resolved(ClientContract::class))->toBeFalse()
+        ->and((new ReflectionProperty(AboutCommand::class, 'customDataResolvers'))->getValue())->toHaveCount(1);
 
     Container::setInstance($previous);
 });

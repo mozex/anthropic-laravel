@@ -106,18 +106,18 @@ Schedule::call(function () {
     foreach (config('services.anthropic.models', ['claude-sonnet-5-5']) as $id) {
         $model = Anthropic::models()->retrieve($id);
 
-        if (in_array($model->lifecycle, ['deprecated', 'retired'], true)) {
+        if ($model->isRetiring() || $model->isRetired()) {
             Log::warning('Claude model is being retired', [
                 'model' => $model->id,
                 'lifecycle' => $model->lifecycle,
-                'retires_at' => $model->retiresAt,
+                'retires_on' => $model->retirementDate()?->format('Y-m-d'),
             ]);
         }
     }
 })->daily();
 ```
 
-A deprecated model whose `retiresAt` has already passed is overdue to retire, so treat it as gone.
+`isRetiring()` is true for a deprecated model, which still answers, and `isRetired()` for a retired one. A deprecated model whose date has passed is overdue (`isRetirementOverdue()`): it may stop answering at any time. `php artisan anthropic:doctor` runs the same check on your `fallback_models` (see [Diagnostics](../reference/diagnostics.md)).
 
 To move to a new model gradually, let [Pennant](https://laravel.com/docs/pennant) pick it per user, then finish or undo the rollout without a deploy, with `Feature::activateForEveryone('claude-sonnet-5-5')` or `deactivateForEveryone()`:
 

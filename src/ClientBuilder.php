@@ -84,6 +84,38 @@ class ClientBuilder
     }
 
     /**
+     * The request timeout in seconds: `request_timeout`, or 30 when it's missing, blank (an empty
+     * `ANTHROPIC_REQUEST_TIMEOUT=` line) or not a number. 0 is Guzzle's "no timeout".
+     *
+     * @param  array<array-key, mixed>  $config
+     */
+    public static function requestTimeout(array $config): float
+    {
+        return is_numeric($config['request_timeout'] ?? null) ? (float) $config['request_timeout'] : 30.0;
+    }
+
+    /**
+     * The `fallback_models` list, trimmed, without blank entries.
+     *
+     * @param  array<array-key, mixed>  $config
+     * @return list<string>
+     */
+    public static function fallbackModels(array $config): array
+    {
+        $models = $config['fallback_models'] ?? [];
+
+        // A config written by hand as env('ANTHROPIC_FALLBACK_MODELS') gives the comma-separated string itself.
+        if (is_string($models)) {
+            $models = explode(',', $models);
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (mixed $model): string => is_string($model) ? trim($model) : '',
+            is_array($models) ? $models : [],
+        )));
+    }
+
+    /**
      * Whether the settings carry a non-blank key or token. An empty `ANTHROPIC_API_KEY=` line, as `anthropic:install`
      * writes one, is no credential.
      *
@@ -105,17 +137,7 @@ class ClientBuilder
     private static function middleware(Container $app, array $config, string $connection): array
     {
         $middleware = [];
-        $fallbackModels = $config['fallback_models'] ?? [];
-
-        // A config written by hand as env('ANTHROPIC_FALLBACK_MODELS') gives the comma-separated string itself.
-        if (is_string($fallbackModels)) {
-            $fallbackModels = explode(',', $fallbackModels);
-        }
-
-        $fallbackModels = array_values(array_filter(array_map(
-            static fn (mixed $model): string => is_string($model) ? trim($model) : '',
-            is_array($fallbackModels) ? $fallbackModels : [],
-        )));
+        $fallbackModels = self::fallbackModels($config);
 
         if ($fallbackModels !== []) {
             // No shared FallbackState: a worker's singleton would pin every user to a fallback after one refusal.
@@ -150,7 +172,7 @@ class ClientBuilder
      */
     private static function httpClient(Container $app, array $config): GuzzleClient
     {
-        $options = ['timeout' => $config['request_timeout'] ?? 30];
+        $options = ['timeout' => self::requestTimeout($config)];
         $connectTimeout = $config['connect_timeout'] ?? null;
 
         if (is_numeric($connectTimeout) && (float) $connectTimeout > 0) {
