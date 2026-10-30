@@ -44,6 +44,21 @@ if ($page1->hasMore) {
 }
 ```
 
+`iterate()` walks every page for you and yields one model at a time, requesting each page only when the loop gets there. Wrap it in a `LazyCollection` for the collection methods:
+
+```php
+use Illuminate\Support\LazyCollection;
+
+$sonnets = LazyCollection::make(fn () => Anthropic::models()->iterate(['limit' => 100]))
+    ->where('line', 'sonnet')
+    ->pluck('id')
+    ->all();
+```
+
+Each pass over a `LazyCollection` runs the requests again, so end the chain with `->all()` when you use the result more than once.
+
+The list holds active and deprecated models. Pass `lifecycle` to pick the stages, such as `['lifecycle' => ['retired']]` for the retired ones, which only show up when asked for.
+
 ## Building a model selector
 
 Cache the model list so you're not hitting the API on every request:

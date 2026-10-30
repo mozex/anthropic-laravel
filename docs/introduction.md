@@ -123,6 +123,7 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Batches](./usage/batches.md): Process large volumes of requests asynchronously
 - [Files](./usage/files.md): Upload documents once, reference them by `file_id` in later requests
 - [Completions](./usage/completions.md): The deprecated Text Completions API
+- [Raw Requests](./usage/raw-requests.md): Call an endpoint the package has no method for yet
 
 **Reference** covers cross-cutting concerns:
 

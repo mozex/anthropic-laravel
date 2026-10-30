@@ -1,6 +1,6 @@
 ---
 name: anthropic-laravel
-description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), computer and browser toolsets, extended thinking, web search, code execution, the MCP connector, document citations, bulk processing with batches, uploading and referencing files by `file_id`, token counting before sending, or testing code that calls the API.
+description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::request()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), computer and browser toolsets, extended thinking, web search, code execution, the MCP connector, document citations, bulk processing with batches, uploading and referencing files by `file_id`, calling an API endpoint the package doesn't wrap yet, token counting before sending, or testing code that calls the API.
 ---
 
 # Anthropic Laravel
@@ -420,7 +420,7 @@ foreach ($response->data as $model) {
 }
 ```
 
-Pagination: `limit` (default 20, max 1000), `after_id`, `before_id`. Each list item is a full `RetrieveResponse`. `maxInputTokens`, `maxTokens`, `capabilities`, `firstId` and `lastId` can be `null`.
+Pagination: `limit` (default 20, max 1000), `after_id`, `before_id`. `iterate()` (on `models()`, `batches()` and `files()`) walks every page, a generator yielding one item at a time and requesting each page only when the loop reaches it; `LazyCollection::make(fn () => Anthropic::models()->iterate())` gives it collection methods. `['lifecycle' => ['retired']]` filters by stage (up to three of `active`, `deprecated`, `retired`; retired models appear only when asked for). Each list item is a full `RetrieveResponse`. `maxInputTokens`, `maxTokens`, `capabilities`, `firstId` and `lastId` can be `null`.
 
 Lifecycle: `$model->lifecycle` (`'active'`, `'deprecated'`, `'retired'`), `$model->line` (`'sonnet'` ...), `$model->deprecatedAt`, `$model->retiresAt`. A scheduled check that logs a warning when a model the app uses is `deprecated` or `retired` catches retirements early (`lifecycle` is `null` on fakes and when the API doesn't send it).
 
@@ -653,9 +653,15 @@ Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertNotSent
 
 Test queued jobs with `$job::dispatchSync()` plus `Anthropic::fake()`.
 
+`iterate()` on the fake takes one queued list fake per page: `ListResponse::fake(['has_more' => true, 'last_id' => '...'])`, then `ListResponse::fake()`, whose `has_more` is false.
+
 Running out of fakes throws "No fake responses left." Use `$fake->addResponses([...])` to add mid-test.
 
 For the full list of fake response classes (`Messages\CountTokensResponse`, `Batches\BatchResultResponse`, `Models\ListResponse`, etc.), the in-memory SSE stream helper, and recursive-merge semantics for nested overrides, fetch `/mozex/anthropic-laravel` via Context7 or the docs site.
+
+## Raw requests
+
+For an endpoint the package has no method for yet, `Anthropic::request('GET', 'skills', ['limit' => 100])` returns a `RawResponse` (`->status`, `->data` decoded from JSON or the body's text, `->meta()`); it doesn't follow `next_page`, so pass it back as `page` yourself. GET and DELETE send the parameters in the query, POST and PUT in a JSON body, and `betas` becomes the `anthropic-beta` header; the path works with or without `/v1`. The config, retries and `withOptions()` apply, and errors throw the usual exceptions. Fake it with `RawResponse::fake($body, status: 204)`, which takes the whole body, not overrides, and assert with `Anthropic::assertSent(\Anthropic\Resources\Raw::class, fn (string $method, string $httpMethod, string $path) => ...)`; the fake records the path as passed.
 
 ## Direct SDK factory (rare)
 

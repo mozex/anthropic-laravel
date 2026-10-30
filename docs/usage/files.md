@@ -111,7 +111,7 @@ foreach ($response->data as $file) {
 }
 ```
 
-Pagination uses `limit` (default 20, max 1000), `after_id` with `lastId` to go forward, `before_id` with `firstId` to go back. The optional `scope_id` parameter filters by session.
+Pagination uses `limit` (default 20, max 1000), `after_id` with `lastId` to go forward, `before_id` with `firstId` to go back. `Anthropic::files()->iterate()` walks every page and yields one file at a time. The optional `scope_id` parameter filters by session.
 
 ## Retrieving metadata
 

@@ -131,6 +131,11 @@ Results are streamed as JSONL so you can process thousands of items without load
 // List with pagination
 $response = Anthropic::batches()->list(['limit' => 10]);
 
+// Every batch, one page at a time
+foreach (Anthropic::batches()->iterate(['limit' => 100]) as $batch) {
+    $batch->processingStatus;
+}
+
 // Cancel in-progress
 Anthropic::batches()->cancel('msgbatch_04Rka1yCsMLGPnR7kfPdgR8x');
 

@@ -63,6 +63,7 @@ Every response class has a `fake()` method with sensible defaults:
 | `Files\FileResponse::fake()` | Files upload/retrieve metadata |
 | `Files\FileListResponse::fake()` | Files list |
 | `Files\DeletedFileResponse::fake()` | Files delete |
+| `Raw\RawResponse::fake()` | `Anthropic::request()` |
 
 Override only the fields you care about. Everything else gets default values:
 
@@ -72,6 +73,19 @@ Anthropic::fake([
         'id' => 'msg_test_123',
         'usage' => ['input_tokens' => 100, 'output_tokens' => 50],
     ]),
+]);
+```
+
+`Raw\RawResponse::fake()` takes the whole body and a status rather than overrides, since a raw response has no defaults to merge into.
+
+`iterate()` on the fake reads one queued page per `list` request:
+
+```php
+use Anthropic\Responses\Models\ListResponse;
+
+Anthropic::fake([
+    ListResponse::fake(['has_more' => true, 'last_id' => 'claude-sonnet-4-6']),
+    ListResponse::fake(), // the default fake has has_more false, so this is the last page
 ]);
 ```
 

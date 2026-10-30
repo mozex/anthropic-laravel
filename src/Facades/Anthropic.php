@@ -10,6 +10,7 @@ use Anthropic\Contracts\ResponseStreamContract;
 use Anthropic\Laravel\Testing\AnthropicFake;
 use Anthropic\Responses\Completions\StreamResponse as CompletionsStreamResponse;
 use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
+use Anthropic\Responses\Raw\RawResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;
 use Stringable;
@@ -22,6 +23,7 @@ use Throwable;
  * @method static \Anthropic\Resources\Batches batches()
  * @method static \Anthropic\Resources\Files files()
  * @method static \Anthropic\Contracts\ClientContract withOptions(array<string, mixed> $options)
+ * @method static \Anthropic\Responses\Raw\RawResponse request(string $method, string $path, array<string, mixed> $parameters = [])
  */
 class Anthropic extends Facade
 {
@@ -36,7 +38,7 @@ class Anthropic extends Facade
     /**
      * Swaps the client for a fake, for the facade and for anything the container resolves as a ClientContract.
      *
-     * @param  array<array-key, ResponseContract<array<array-key, mixed>>|ResponseStreamContract<mixed>|CompletionsStreamResponse|MessagesStreamResponse|Throwable|Stringable|string>  $responses
+     * @param  array<array-key, ResponseContract<array<array-key, mixed>>|ResponseStreamContract<mixed>|CompletionsStreamResponse|MessagesStreamResponse|RawResponse|Throwable|Stringable|string>  $responses
      */
     public static function fake(array $responses = []): AnthropicFake
     {

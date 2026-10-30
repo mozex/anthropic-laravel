@@ -4,6 +4,12 @@
 
 This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw subclasses of `ErrorException`, such as `OverloadedException` for a 529. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`). Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1110) as well.
 
+### The Models lifecycle Filter Now Applies
+
+**Likelihood Of Impact: Low**
+
+A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired']])`, used to go out in a form the API accepts and ignores, so the filter did nothing. It's now sent as `lifecycle[]=retired`, and the results follow it.
+
 ### New Config Keys
 
 **Likelihood Of Impact: Low**

@@ -12,12 +12,14 @@ use Anthropic\Resources\Completions;
 use Anthropic\Resources\Files;
 use Anthropic\Resources\Messages;
 use Anthropic\Resources\Models;
+use Anthropic\Resources\Raw;
 use Anthropic\Responses\Batches\BatchResponse;
 use Anthropic\Responses\Completions\CreateResponse;
 use Anthropic\Responses\Files\DeletedFileResponse;
 use Anthropic\Responses\Files\FileResponse;
 use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
 use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
+use Anthropic\Responses\Raw\RawResponse;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
@@ -401,6 +403,29 @@ test('fake accepts exceptions and streams as responses', function () {
     expect(fn () => Anthropic::messages()->create(['model' => 'claude-haiku-4-5']))
         ->toThrow(ErrorException::class, 'Overloaded')
         ->and(Anthropic::files()->download('file_011CNha8iCJcU1wXNR6q4V8w'))->toBe('file bytes');
+});
+
+test('a raw request through the facade fake returns the queued response', function () {
+    $fake = Anthropic::fake([
+        RawResponse::fake(['data' => [], 'next_page' => null]),
+    ]);
+
+    expect(Anthropic::request('GET', 'skills')->data)->toBe(['data' => [], 'next_page' => null]);
+
+    $fake->assertSent(Raw::class, fn (string $method, string $httpMethod, string $path): bool => $httpMethod === 'GET' && $path === 'skills');
+});
+
+test('iterate() through the facade fake walks the queued pages', function () {
+    $fake = Anthropic::fake([
+        // composed: the fixture with has_more and a cursor set
+        ModelsListResponse::fake(['has_more' => true, 'last_id' => 'claude-haiku-4-5']),
+        ModelsListResponse::fake(),
+    ]);
+
+    expect(iterator_to_array(Anthropic::models()->iterate()))->toHaveCount(2);
+
+    $fake->assertSent(Models::class, 2);
+    $fake->assertSent(Models::class, fn (string $method, array $parameters): bool => ($parameters['after_id'] ?? null) === 'claude-haiku-4-5');
 });
 
 test('a withOptions client from the facade fake shares its queue and records its options', function () {

@@ -25,6 +25,7 @@ arch('facades')
         'Anthropic\Laravel\Testing\AnthropicFake',
         'Anthropic\Responses\Completions\StreamResponse',
         'Anthropic\Responses\Messages\StreamResponse',
+        'Anthropic\Responses\Raw\RawResponse',
     ]);
 
 arch('service providers')

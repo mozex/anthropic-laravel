@@ -40,7 +40,7 @@ Small package with 6 source files in `src/`:
 
 The install command adds each `.env` key a file lacks (an anchored match, commented lines count), so a re-run brings an older `.env` up to date. The optional keys go in commented out: other packages read the same names (Prism reads `ANTHROPIC_API_VERSION`), and Laravel's `env()` returns `''` for an empty line, which drops their default. When `config/anthropic.php` already exists, it names the keys the package's config has that the published copy lacks, since their `.env` variables do nothing until they're added.
 
-**Underlying client** (`mozex/anthropic-php`) exposes `->messages()`, `->completions()`, `->models()`, `->batches()`, and `->files()`.
+**Underlying client** (`mozex/anthropic-php`) exposes `->messages()`, `->completions()`, `->models()`, `->batches()`, `->files()`, `->withOptions()` and `->request()` (raw requests to any path; the fake records them under `Anthropic\Resources\Raw::class`); the list resources have `iterate()`.
 
 ## Code Conventions
 

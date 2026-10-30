@@ -29,6 +29,7 @@ Laravel wrapper for [Anthropic PHP](https://github.com/mozex/anthropic-php), the
   - [Batches](https://mozex.dev/docs/anthropic-laravel/v1/usage/batches)
   - [Files](https://mozex.dev/docs/anthropic-laravel/v1/usage/files)
   - [Completions](https://mozex.dev/docs/anthropic-laravel/v1/usage/completions)
+  - [Raw Requests](https://mozex.dev/docs/anthropic-laravel/v1/usage/raw-requests)
 - Reference
   - [Configuration](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration)
   - [Error Handling](https://mozex.dev/docs/anthropic-laravel/v1/reference/error-handling)
