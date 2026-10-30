@@ -318,6 +318,10 @@ it('streams the reply', function () {
 
 For exact control, pass a list of event arrays instead, or a file resource of recorded SSE. `Blocks` also builds `toolUse()`, `thinking()`, `serverToolUse()` and `webSearchToolResult()` blocks for a fake's `content`, and `BatchResultResponse::fake([...])` takes the result lines a batch's results would hold.
 
+## Testing token budgets
+
+Calls under `Anthropic::fake()` are neither charged nor refused by an enforced budget, since nothing is sent, though an `Anthropic::batch()` poll job still charges its results. Use the budget up with `charge()`, then check the route's 429 or the job's release, as [Token Budgets](../usage/token-budgets.md#in-tests) shows.
+
 ## Record and replay
 
 `Anthropic::record()` runs a test against the real API once, saves the answers to a cassette file, then replays them on every later run, with no HTTP call and no key:

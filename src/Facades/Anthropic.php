@@ -32,6 +32,7 @@ use Throwable;
  * @method static \Anthropic\Laravel\Batches\PendingBatch batch(array<int, array<string, mixed>> $requests)
  * @method static \Anthropic\Laravel\Connection connection(?string $name = null)
  * @method static \Anthropic\Laravel\Connection withApiKey(string $apiKey)
+ * @method static \Anthropic\Laravel\Budgets\Budget budget(string $key)
  * @method static \Anthropic\Laravel\AnthropicManager for(?\Illuminate\Database\Eloquent\Model $billable, ?string $feature = null)
  * @method static \Anthropic\Contracts\ClientContract organization()
  * @method static \Anthropic\Contracts\ClientContract enterprise()

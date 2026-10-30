@@ -7,6 +7,7 @@ namespace Anthropic\Laravel\Batches;
 use Anthropic\Exceptions\ConnectionException;
 use Anthropic\Exceptions\ErrorException;
 use Anthropic\Laravel\AnthropicManager;
+use Anthropic\Laravel\Budgets\Budget;
 use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Events\BatchEnded;
 use Anthropic\Laravel\Events\BatchResultReceived;
@@ -51,8 +52,7 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
      * @param  list<SerializableClosure|callable>  $then
      * @param  list<SerializableClosure|callable>  $catch
      * @param  string|null  $sealed  the `withApiKey()` key and the `withOptions()` options, through `Crypt::encrypt()`
-     * @param  array{billableType?: ?string, billableId?: int|string|null, feature?: ?string}  $attribution  what
-     *                                                                                                       `Anthropic::for()` set when the batch was sent
+     * @param  array{billableType?: ?string, billableId?: int|string|null, feature?: ?string, budgets?: list<mixed>}  $attribution  what `Anthropic::for()` and `enforce()` set when it was sent
      */
     public function __construct(
         public readonly string $messageBatchId,
@@ -126,46 +126,61 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
         // With the ledger on, the results' rows go in with a few inserts, not a queued job each.
         $ledger = config('anthropic.ledger.enabled') === true;
         $rows = [];
+        // Each budget is charged once for all the results, not a cache write each.
+        $budgets = Budget::all($this->attribution['budgets'] ?? []);
+        $spent = array_fill(0, count($budgets), 0);
 
-        foreach ($results ?? [] as $individual) {
-            $events->dispatch(new BatchResultReceived($this->anthropicConnection, $this->messageBatchId, $individual->customId, $individual->result->toArray()));
+        // Charged for what was read even when a listener throws partway: the API billed it.
+        try {
+            foreach ($results ?? [] as $individual) {
+                $events->dispatch(new BatchResultReceived($this->anthropicConnection, $this->messageBatchId, $individual->customId, $individual->result->toArray()));
 
-            $message = $individual->result->message;
+                $message = $individual->result->message;
 
-            if ($message === null) {
-                continue;
+                if ($message === null) {
+                    continue;
+                }
+
+                $usage = new UsageRecorded(
+                    connection: $this->anthropicConnection,
+                    model: $message->model,
+                    requestId: null,
+                    usage: $message->usage->toArray(),
+                    durationMs: null,
+                    batch: true,
+                    completed: true,
+                    billableType: $this->attribution['billableType'] ?? null,
+                    billableId: $this->attribution['billableId'] ?? null,
+                    feature: $this->attribution['feature'] ?? null,
+                    batchId: $this->messageBatchId,
+                    customId: $individual->customId,
+                    at: Date::now()->getTimestamp(),
+                    budgets: $this->attribution['budgets'] ?? [],
+                );
+                $events->dispatch($usage);
+
+                foreach ($budgets as $index => $budget) {
+                    $spent[$index] += $budget->tokensOf($message->usage);
+                }
+
+                if ($ledger) {
+                    $rows[] = AnthropicRequest::rowFrom($usage);
+                }
+
+                // 100 rows keep an insert's bound parameters under SQL Server's 2,100.
+                if (count($rows) === 100) {
+                    $ledger = self::insert($rows);
+                    $rows = [];
+                }
             }
 
-            $usage = new UsageRecorded(
-                connection: $this->anthropicConnection,
-                model: $message->model,
-                requestId: null,
-                usage: $message->usage->toArray(),
-                durationMs: null,
-                batch: true,
-                completed: true,
-                billableType: $this->attribution['billableType'] ?? null,
-                billableId: $this->attribution['billableId'] ?? null,
-                feature: $this->attribution['feature'] ?? null,
-                batchId: $this->messageBatchId,
-                customId: $individual->customId,
-                at: Date::now()->getTimestamp(),
-            );
-            $events->dispatch($usage);
-
-            if ($ledger) {
-                $rows[] = AnthropicRequest::rowFrom($usage);
+            if ($ledger && $rows !== []) {
+                self::insert($rows);
             }
-
-            // 100 rows keep an insert's bound parameters under SQL Server's 2,100.
-            if (count($rows) === 100) {
-                $ledger = self::insert($rows);
-                $rows = [];
+        } finally {
+            foreach ($budgets as $index => $budget) {
+                $budget->chargeQuietly($spent[$index]);
             }
-        }
-
-        if ($ledger && $rows !== []) {
-            self::insert($rows);
         }
 
         $events->dispatch(new BatchEnded($this->anthropicConnection, $this->messageBatchId, $batch->toArray()));

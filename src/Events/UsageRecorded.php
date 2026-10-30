@@ -14,6 +14,7 @@ class UsageRecorded
     /**
      * @param  array<array-key, mixed>  $usage  the answer's `usage`, as the API sent it
      * @param  int|null  $at  the Unix time the call was billed, so a queued ledger row keeps it
+     * @param  list<mixed>  $budgets  the token budgets the call was made under: each one's key, size, window and count
      */
     public function __construct(
         public readonly string $connection,
@@ -29,5 +30,6 @@ class UsageRecorded
         public readonly ?string $batchId = null,
         public readonly ?string $customId = null,
         public readonly ?int $at = null,
+        public readonly array $budgets = [],
     ) {}
 }

@@ -72,7 +72,7 @@ Schedule::command('model:prune', ['--model' => [\Anthropic\Laravel\Ledger\Anthro
 
 ## Listening yourself
 
-Each recorded call dispatches `Anthropic\Laravel\Events\UsageRecorded`, with the ledger on or off: the connection, the model, the request ID, the `usage` array as the API sent it, the duration, `batch` (with the batch ID and `custom_id`), `completed`, the billable and feature `Anthropic::for()` set, and the time it was billed. A listener of your own can send it to a metrics service:
+Each recorded call dispatches `Anthropic\Laravel\Events\UsageRecorded`, with the ledger on or off: the connection, the model, the request ID, the `usage` array as the API sent it, the duration, `batch` (with the batch ID and `custom_id`), `completed`, the billable and feature `Anthropic::for()` set, the time it was billed, and the [token budgets](./token-budgets.md) it was charged to. A listener of your own can send it to a metrics service:
 
 ```php
 Event::listen(function (UsageRecorded $usage) {

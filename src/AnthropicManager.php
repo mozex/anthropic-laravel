@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Anthropic\Laravel;
 
 use Anthropic\Contracts\ClientContract;
+use Anthropic\Laravel\Budgets\Budget;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\Ledger\Attribution;
 use Anthropic\Laravel\Testing\AnthropicFake;
@@ -117,6 +118,14 @@ class AnthropicManager extends MultipleInstanceManager
         Attribution::set($billable, $feature);
 
         return $this;
+    }
+
+    /**
+     * A token budget under this key: `Anthropic::budget('user:'.$user->id)->perDay(200_000)->enforce()`.
+     */
+    public function budget(string $key): Budget
+    {
+        return new Budget($key);
     }
 
     /**

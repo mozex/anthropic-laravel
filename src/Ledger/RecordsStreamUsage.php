@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Anthropic\Laravel\Ledger;
 
+use Anthropic\Laravel\Budgets\Budget;
 use Anthropic\Laravel\Events\UsageRecorded;
 use Anthropic\Responses\Messages\CreateStreamedResponse;
 use Anthropic\Responses\Messages\StreamResponse;
@@ -15,9 +16,10 @@ use Illuminate\Support\Testing\Fakes\Fake;
 use Throwable;
 
 /**
- * The client's stream completion handler: once a stream ends or is dropped, it dispatches `UsageRecorded` with what
- * the stream used, and with `anthropic.context` adds its tokens to Context, as the middleware does for a non-streamed
- * answer. A stream that read nothing records nothing, and a failure to record never reaches the stream's reader.
+ * The client's stream completion handler: once a stream ends or is dropped, it charges what the stream used to the
+ * enforced token budgets and dispatches `UsageRecorded` with it, and with `anthropic.context` adds its tokens to
+ * Context, as the middleware does for a non-streamed answer. A stream that read nothing records nothing, and a failure
+ * to record never reaches the stream's reader.
  *
  * @internal
  */
@@ -46,9 +48,16 @@ class RecordsStreamUsage
 
         try {
             $events = ($this->events)();
+            $attribution = Attribution::current();
+            $listening = $events !== null && ($events instanceof Fake || $events->hasListeners(UsageRecorded::class));
 
-            if ($events !== null && ($events instanceof Fake || $events->hasListeners(UsageRecorded::class))) {
-                $events->dispatch(new UsageRecorded($this->connection, $stream->model(), $stream->meta()->requestId, $usage, $stream->durationMs(), false, $stream->completed(), ...Attribution::current(), at: Date::now()->getTimestamp()));
+            if ($listening || $attribution['budgets'] !== []) {
+                $recorded = new UsageRecorded($this->connection, $stream->model(), $stream->meta()->requestId, $usage, $stream->durationMs(), false, $stream->completed(), ...$attribution, at: Date::now()->getTimestamp());
+                Budget::chargeRecorded($recorded);
+
+                if ($listening) {
+                    $events->dispatch($recorded);
+                }
             }
 
             if ($this->context !== null) {

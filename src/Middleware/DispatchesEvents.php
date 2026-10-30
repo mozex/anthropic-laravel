@@ -6,6 +6,7 @@ namespace Anthropic\Laravel\Middleware;
 
 use Anthropic\Exceptions\ConnectionException;
 use Anthropic\Exceptions\TimeoutException;
+use Anthropic\Laravel\Budgets\Budget;
 use Anthropic\Laravel\Events\RateLimited;
 use Anthropic\Laravel\Events\RequestFailed;
 use Anthropic\Laravel\Events\RequestSending;
@@ -31,11 +32,13 @@ use Psr\Http\Message\ResponseInterface;
 use Throwable;
 
 /**
- * Dispatches the package's events around every HTTP attempt, a retry included: `RequestSending`, then
- * `ResponseReceived`, or `RequestFailed` (and `RateLimited` on a 429). With `$laravelEvents`, it also dispatches
- * Laravel's own `RequestSending`, then `ResponseReceived` or `ConnectionFailed`, always as a pair, which Telescope
- * records. No event carries the API key, a token or another credential, in a header or the body (an MCP server's
- * `authorization_token`), and only JSON bodies are read. An event nobody listens to isn't built.
+ * Holds a call to the token budgets `Budget::enforce()` set (refused before it's sent once one is used up, charged to
+ * each as it's billed), and dispatches the package's events around every HTTP attempt, a retry included:
+ * `RequestSending`, then `ResponseReceived`, or `RequestFailed` (and `RateLimited` on a 429). With `$laravelEvents`,
+ * it also dispatches Laravel's own `RequestSending`, then `ResponseReceived` or `ConnectionFailed`, always as a pair,
+ * which Telescope records. No event carries the API key, a token or another credential, in a header or the body (an
+ * MCP server's `authorization_token`), and only JSON bodies are read. An event nobody listens to isn't built, except
+ * the `UsageRecorded` an enforced budget is charged from.
  */
 class DispatchesEvents
 {
@@ -64,7 +67,17 @@ class DispatchesEvents
             }
         }
 
-        if ($listening === [] && ! $this->laravelEvents) {
+        // A used-up budget refuses a billed call (a Messages request or a batch) before it's sent.
+        $budgets = Attribution::current()['budgets'];
+        $path = $request->getUri()->getPath();
+        $messages = str_ends_with($path, '/messages');
+
+        if ($budgets !== [] && $request->getMethod() === 'POST' && ($messages || str_ends_with($path, '/messages/batches'))) {
+            Budget::ensureEach(Budget::all($budgets));
+        }
+
+        // A budget charges a Messages answer even when nothing listens, so that answer is read too.
+        if ($listening === [] && ! $this->laravelEvents && ($budgets === [] || ! $messages)) {
             return $next($request);
         }
 
@@ -115,6 +128,16 @@ class DispatchesEvents
         $body = self::isStreamed($response) ? null : self::json($response);
         $meta = MetaInformation::from($response->getHeaders());
 
+        // A billed Messages answer, charged before any listener runs, so one that throws can't skip it; a stream
+        // records its usage once it ends, through the client's completion handler.
+        $attribution = Attribution::current();
+        $usage = null;
+
+        if ((isset($listening[UsageRecorded::class]) || $attribution['budgets'] !== []) && $status === 200 && is_array($body['usage'] ?? null) && $messages) {
+            $usage = new UsageRecorded($this->connection, is_string($body['model'] ?? null) ? $body['model'] : null, $meta->requestId, $body['usage'], $duration, false, true, ...$attribution, at: Date::now()->getTimestamp());
+            Budget::chargeRecorded($usage);
+        }
+
         if (isset($listening[ResponseReceived::class])) {
             $events->dispatch(new ResponseReceived(
                 $this->connection,
@@ -129,9 +152,8 @@ class DispatchesEvents
             ));
         }
 
-        // A billed Messages answer; a stream records its usage once it ends, through the client's completion handler.
-        if (isset($listening[UsageRecorded::class]) && $status === 200 && is_array($body['usage'] ?? null) && str_ends_with($request->getUri()->getPath(), '/messages')) {
-            $events->dispatch(new UsageRecorded($this->connection, is_string($body['model'] ?? null) ? $body['model'] : null, $meta->requestId, $body['usage'], $duration, false, true, ...Attribution::current(), at: Date::now()->getTimestamp()));
+        if ($usage !== null && isset($listening[UsageRecorded::class])) {
+            $events->dispatch($usage);
         }
 
         if ($status >= 400) {

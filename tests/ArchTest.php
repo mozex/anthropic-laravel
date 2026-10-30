@@ -12,7 +12,7 @@ arch('it uses strict types')
 
 arch('exceptions')
     ->expect('Anthropic\Laravel\Exceptions')
-    ->toUseNothing();
+    ->toOnlyUse('Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException');
 
 arch('facades')
     ->expect('Anthropic\Laravel\Facades\Anthropic')
@@ -54,6 +54,7 @@ arch('middleware')
         'Laravel\Telescope\Telescope',
         'Psr\Http\Message',
         'Anthropic\Laravel\Ledger\Attribution',
+        'Anthropic\Laravel\Budgets\Budget',
     ]);
 
 arch('service providers')
@@ -64,6 +65,7 @@ arch('service providers')
         'Illuminate\Contracts\Foundation\Application',
         'Illuminate\Foundation\Console\AboutCommand',
         'Illuminate\Queue\Events\Looping',
+        'Illuminate\Routing\Router',
         'Illuminate\Support\ServiceProvider',
         'Anthropic\Laravel',
         'Anthropic\Client',
