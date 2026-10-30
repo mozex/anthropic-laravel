@@ -170,21 +170,21 @@ it('processes a Claude job', function () {
 Pass an exception as a fake response. It will be thrown when the matching request runs:
 
 ```php
-use Anthropic\Exceptions\ErrorException;
+use Anthropic\Exceptions\OverloadedException;
 use GuzzleHttp\Psr7\Response;
 
 Anthropic::fake([
-    new ErrorException([
+    new OverloadedException([
         'message' => 'Overloaded',
         'type' => 'overloaded_error',
     ], new Response(529)),
 ]);
 
-// This throws ErrorException
+// This throws OverloadedException
 Anthropic::messages()->create([...]);
 ```
 
-Pass a PSR-7 response as the second argument, as the client does, so the code under test can read headers from `$e->response`. A job that releases on a 429 can be tested with `new RateLimitException([...], new Response(429, ['retry-after' => '30']))`. An `int` status code in place of the response is deprecated.
+Fake the class the client would throw for that status: a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`. Pass a PSR-7 response as the second argument, as the client does, so the code under test can read headers from `$e->response`. A job that releases on a 429 can be tested with `new RateLimitException([...], new Response(429, ['retry-after' => '30']))`. An `int` status code in place of the response is deprecated.
 
 ## Testing streamed responses
 

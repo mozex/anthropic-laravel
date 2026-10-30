@@ -1,5 +1,9 @@
 # Upgrading
 
+## To 1.11.0
+
+This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw subclasses of `ErrorException`, such as `OverloadedException` for a 529. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`). Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1110) as well.
+
 ## To 1.10.0
 
 This release requires `mozex/anthropic-php` 1.10, whose changes reach you through the facade too: every error status throws `ErrorException`, `toArray()` returns every field the API sent, and a few response fields became nullable. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1100) as well.

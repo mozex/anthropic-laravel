@@ -513,14 +513,21 @@ Rate limit: ~100 Files calls per minute per org. Throttle with `RateLimiter::for
 Exception hierarchy:
 
 ```
-ErrorException          (any 4xx/5xx API response)
-└── RateLimitException  (HTTP 429)
+ErrorException          (any 4xx/5xx API response, or an error mid-stream)
+├── BadRequestException (400), AuthenticationException (401), BillingException (402),
+│   PermissionDeniedException (403), NotFoundException (404), ConflictException (409),
+│   RequestTooLargeException (413), UnprocessableEntityException (422)
+├── RateLimitException  (HTTP 429)
+├── InternalServerException (500, other 5xx), ApiTimeoutException (504)
+└── OverloadedException (529)
 TransporterException    (network, DNS, connection)
+└── ConnectionException
+    └── TimeoutException (your HTTP client gave up; a 504 from the API is ApiTimeoutException)
 UnserializableResponse  (a 2xx response that wasn't valid JSON)
 ApiKeyIsMissing         (Laravel wrapper; config-time)
 ```
 
-On `ErrorException`: `$e->getMessage()`, `$e->getErrorType()` (e.g., `'invalid_request_error'`, `'rate_limit_error'`, `'overloaded_error'`), `$e->getStatusCode()`, `$e->response` (PSR-7).
+On `ErrorException`: `$e->getMessage()`, `$e->getErrorType()` (e.g., `'invalid_request_error'`, `'rate_limit_error'`, `'overloaded_error'`), `$e->getStatusCode()`, `$e->getRequestId()`, `$e->getErrorDetails()`, `$e->getRetryAfter()` (seconds), `$e->response` (PSR-7). A mid-stream error throws the subclass of its error type (status 200).
 
 Catch the specific subclass first, since `RateLimitException extends ErrorException`:
 
@@ -528,7 +535,7 @@ Catch the specific subclass first, since `RateLimitException extends ErrorExcept
 try {
     Anthropic::messages()->create([...]);
 } catch (RateLimitException $e) {
-    sleep(\Anthropic\Responses\Meta\MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
+    sleep($e->getRetryAfter() ?? 60);
 } catch (ErrorException $e) {
     // other API errors
 } catch (TransporterException $e) {
@@ -538,10 +545,12 @@ try {
 
 ### Queue retry pattern
 
-Release the job on rate limits and 529 overloads instead of throwing. Overload errors are expected during peak and shouldn't page an on-call engineer. Match overloads by `getErrorType()`, never `getStatusCode()`: one that arrives mid-stream carries status 200.
+Release the job on rate limits and 529 overloads instead of throwing. Overload errors are expected during peak and shouldn't page an on-call engineer. Catch `OverloadedException` (or check `getErrorType()`), never `getStatusCode()`: one that arrives mid-stream carries status 200 and is still an `OverloadedException`. Fail the job on the spend-cap 429: retrying won't help.
 
 ```php
 class AskClaudeJob implements ShouldQueue {
+    use \Illuminate\Foundation\Queue\Queueable;
+
     public $tries = 5;
     public $backoff = [10, 30, 60, 120, 300];
 
@@ -549,12 +558,15 @@ class AskClaudeJob implements ShouldQueue {
         try {
             Anthropic::messages()->create([...]);
         } catch (RateLimitException $e) {
-            // retryAfter is null on the spend-cap 429, which carries no Retry-After
-            $this->release(\Anthropic\Responses\Meta\MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
+            if (($e->getErrorDetails()['error_code'] ?? null) === 'enforced_spend_limit_reached') {
+                $this->fail($e); // the monthly spend cap carries no Retry-After
+                return;
+            }
+            $this->release($e->getRetryAfter() ?? 60);
             return;
-        } catch (ErrorException $e) {
-            if ($e->getErrorType() === 'overloaded_error') { $this->release(30); return; }
-            throw $e;
+        } catch (\Anthropic\Exceptions\OverloadedException $e) {
+            $this->release(30);
+            return;
         }
     }
 }
@@ -566,13 +578,11 @@ Drop specific errors from the error tracker via `bootstrap/app.php`:
 
 ```php
 ->withExceptions(function (Exceptions $exceptions) {
-    $exceptions->reportable(function (\Anthropic\Exceptions\ErrorException $e) {
-        if ($e->getErrorType() === 'overloaded_error') return false;
-    });
+    $exceptions->dontReport(\Anthropic\Exceptions\OverloadedException::class);
 })
 ```
 
-Returning `false` stops default reporting. Returning nothing falls through. Extend for any error type you want quiet.
+When the class alone isn't enough, a `reportable` callback returning `false` stops default reporting.
 
 For the full HTTP status code table and the underlying transport details, fetch `/mozex/anthropic-laravel` or `/mozex/anthropic-php` via Context7 or the docs site.
 
@@ -593,7 +603,7 @@ $meta->fastInputTokenLimit?->...;       // null unless the request used fast mod
 $meta->fastOutputTokenLimit?->...;
 $meta->organizationId;
 $meta->workspaceId;
-$meta->retryAfter;                      // seconds; sent with 429s, so read it from the exception's response
+$meta->retryAfter;                      // seconds; sent with 429s, so read it with $e->getRetryAfter()
 ```
 
 Throttle before you hit 429 by stashing a cache flag when remaining drops low:
@@ -626,7 +636,7 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
 });
 ```
 
-Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass `ErrorException` instances as fakes to test error branches, built with a PSR-7 response (`new ErrorException([...], new \GuzzleHttp\Psr7\Response(529))`; an int status is deprecated). Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
+Every response class has `::fake()` with sensible defaults. Overrides merge recursively, so you can change one nested field without rewriting the parent; a nested item with a different `type` (a `tool_use` block over the default `text` block) replaces it instead. Pass exceptions as fakes to test error branches, using the subclass the client would throw (`new \Anthropic\Exceptions\OverloadedException([...], new \GuzzleHttp\Psr7\Response(529))`): a plain `ErrorException` doesn't reach a `catch (OverloadedException $e)`. An int status in place of the response is deprecated. Pass a file resource (or `php://memory` stream) to `CreateStreamedResponse::fake()` for streaming tests.
 
 Assertions: `Anthropic::assertSent($resource, $callbackOrCount)`, `assertNotSent`, `assertNothingSent`. Also resource-level: `Anthropic::messages()->assertSent(...)`.
 

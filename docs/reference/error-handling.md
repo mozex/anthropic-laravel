@@ -26,18 +26,24 @@ The raw PSR-7 response is on the `response` property if you need to inspect head
 
 ### Common API errors
 
-| Status | Error type | Typical cause |
-|--------|-----------|---------------|
-| 400 | `invalid_request_error` | Bad parameters, missing required fields |
-| 401 | `authentication_error` | Invalid or missing API key |
-| 402 | `billing_error` | Issue with billing or payment information |
-| 403 | `permission_error` | API key doesn't have access to the requested resource |
-| 404 | `not_found_error` | Invalid model name or resource ID |
-| 413 | `request_too_large` | Request exceeds the maximum size |
-| 429 | `rate_limit_error` | Too many requests (see below) |
-| 500 | `api_error` | Server-side issue |
-| 504 | `timeout_error` | Request timed out while processing |
-| 529 | `overloaded_error` | API is temporarily overloaded |
+Each status throws its own subclass of `ErrorException` (all in `Anthropic\Exceptions`), so a `catch (ErrorException $e)` still catches everything:
+
+| Status | Error type | Exception | Typical cause |
+|--------|-----------|-----------|---------------|
+| 400 | `invalid_request_error` | `BadRequestException` | Bad parameters, missing required fields |
+| 401 | `authentication_error` | `AuthenticationException` | Invalid or missing API key |
+| 402 | `billing_error` | `BillingException` | Issue with billing or payment information |
+| 403 | `permission_error` | `PermissionDeniedException` | API key doesn't have access to the requested resource |
+| 404 | `not_found_error` | `NotFoundException` | Invalid model name or resource ID |
+| 409 | `conflict_error` | `ConflictException` | Conflicts with the resource's current state |
+| 413 | `request_too_large` | `RequestTooLargeException` | Request exceeds the maximum size |
+| 422 | | `UnprocessableEntityException` | Well formed, but couldn't be processed |
+| 429 | `rate_limit_error` | `RateLimitException` | Too many requests (see below) |
+| 500 | `api_error` | `InternalServerException` | Server-side issue (other 5xx too) |
+| 504 | `timeout_error` | `ApiTimeoutException` | Request timed out while processing |
+| 529 | `overloaded_error` | `OverloadedException` | API is temporarily overloaded |
+
+A status without its own class, such as 405, throws a plain `ErrorException`. An error in the middle of a stream throws the class for its error type, even though its status is 200. `$e->getRequestId()` returns the failed request's ID for support, and `$e->getErrorDetails()` returns the error's `details`.
 
 ## Rate limit errors
 
@@ -46,12 +52,11 @@ HTTP 429 responses throw `RateLimitException`, a subclass of `ErrorException`. C
 ```php
 use Anthropic\Exceptions\RateLimitException;
 use Anthropic\Exceptions\ErrorException;
-use Anthropic\Responses\Meta\MetaInformation;
 
 try {
     $response = Anthropic::messages()->create([...]);
 } catch (RateLimitException $e) {
-    sleep(MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
+    sleep($e->getRetryAfter() ?? 60);
     // Retry
 } catch (ErrorException $e) {
     // Other API errors
@@ -63,10 +68,15 @@ try {
 Queue jobs are a natural fit for retry logic. Combine Laravel's `tries` and `backoff` with rate limit handling:
 
 ```php
-use Anthropic\Responses\Meta\MetaInformation;
+use Anthropic\Exceptions\OverloadedException;
+use Anthropic\Exceptions\RateLimitException;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
 
 class AskClaudeJob implements ShouldQueue
 {
+    use Queueable;
+
     public $tries = 5;
     public $backoff = [10, 30, 60, 120, 300];
 
@@ -75,15 +85,16 @@ class AskClaudeJob implements ShouldQueue
         try {
             $response = Anthropic::messages()->create([...]);
         } catch (RateLimitException $e) {
-            $this->release(MetaInformation::from($e->response?->getHeaders() ?? [])->retryAfter ?? 60);
-            return;
-        } catch (ErrorException $e) {
-            if ($e->getErrorType() === 'overloaded_error') {
-                $this->release(30);
+            if (($e->getErrorDetails()['error_code'] ?? null) === 'enforced_spend_limit_reached') {
+                $this->fail($e); // Monthly spend cap: retrying won't help
                 return;
             }
 
-            throw $e;
+            $this->release($e->getRetryAfter() ?? 60);
+            return;
+        } catch (OverloadedException $e) {
+            $this->release(30);
+            return;
         }
 
         // Process response...
@@ -91,19 +102,22 @@ class AskClaudeJob implements ShouldQueue
 }
 ```
 
-`retryAfter` is the `Retry-After` header in seconds, `null` when the 429 has none (an organization past its tier's monthly spend cap gets none, since waiting won't help).
+`getRetryAfter()` returns the `Retry-After` header in seconds, or `null` when the 429 has none. An organization past its tier's monthly spend cap gets none, since waiting won't help until access resumes. `getErrorDetails()` identifies that case, so the job fails instead of burning through its tries.
 
-Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Check the error type, not the status code: an overload that arrives in the middle of a stream comes with status 200.
+Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Catch `OverloadedException`, or check `getErrorType()`, never the status code: an overload in the middle of a stream comes with status 200 and still throws `OverloadedException`.
 
 ## Transport errors
 
-Network failures (DNS, connection refused, timeout) throw `TransporterException`:
+Network failures throw `TransporterException`. A failed connection (DNS, refused or dropped) throws its subclass `ConnectionException`, and a timeout throws `TimeoutException`, which extends `ConnectionException`:
 
 ```php
+use Anthropic\Exceptions\TimeoutException;
 use Anthropic\Exceptions\TransporterException;
 
 try {
     $response = Anthropic::messages()->create([...]);
+} catch (TimeoutException $e) {
+    // Raise ANTHROPIC_REQUEST_TIMEOUT, or stream the response
 } catch (TransporterException $e) {
     $e->getMessage(); // Underlying HTTP client error
 }
@@ -128,29 +142,29 @@ This is a config-time error. Usually you'll catch it once during deployment, not
 ## Exception hierarchy
 
 ```
-ErrorException (API errors)
-├── RateLimitException (HTTP 429)
+ErrorException (API errors; one subclass per status, see the table above)
+└── BadRequestException (400) ... RateLimitException (429) ... OverloadedException (529)
 TransporterException (HTTP client/network errors)
+└── ConnectionException
+    └── TimeoutException
 UnserializableResponse (a 2xx response that isn't valid JSON)
 ApiKeyIsMissing (config-time error)
 ```
+
+A 504 from the API throws `ApiTimeoutException`, an `ErrorException`. The transport `TimeoutException` only covers your HTTP client giving up.
 
 You can silence specific errors globally from Laravel's exception handler. A common case is skipping overload errors so they don't show up in your error tracker every time the API gets busy:
 
 ```php
 // bootstrap/app.php
-use Anthropic\Exceptions\ErrorException;
+use Anthropic\Exceptions\OverloadedException;
 
 ->withExceptions(function (Exceptions $exceptions) {
-    $exceptions->reportable(function (ErrorException $e) {
-        if ($e->getErrorType() === 'overloaded_error') {
-            return false;
-        }
-    });
+    $exceptions->dontReport(OverloadedException::class);
 })
 ```
 
-Returning `false` from a `reportable` callback tells Laravel to stop the default reporting for that exception. Return nothing (or `null`) and it falls through to the normal reporting chain. Extend this pattern for any other error types you want to handle quietly.
+When the class alone isn't enough, return `false` from a `reportable` callback to stop the default reporting for that exception. Return nothing and it falls through to the normal chain.
 
 ---
 

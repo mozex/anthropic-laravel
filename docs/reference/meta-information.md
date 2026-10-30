@@ -108,22 +108,21 @@ Your next job can check the cache flag before making a request.
 
 ## Retry-After in a queued job
 
-`$meta->retryAfter` reads the `Retry-After` header as seconds. A successful response rarely has it: the API sends it with a 429, which throws. Build the meta from the exception's response to release the job for as long as the API asks:
+`$meta->retryAfter` reads the `Retry-After` header as seconds. A successful response rarely has it: the API sends it with a 429, which throws. Read it from the exception to release the job for as long as the API asks:
 
 ```php
 use Anthropic\Exceptions\RateLimitException;
-use Anthropic\Responses\Meta\MetaInformation;
 
 try {
     $response = Anthropic::messages()->create([...]);
 } catch (RateLimitException $e) {
-    $meta = MetaInformation::from($e->response?->getHeaders() ?? []);
-
-    $this->release($meta->retryAfter ?? 60);
+    $this->release($e->getRetryAfter() ?? 60);
 
     return;
 }
 ```
+
+For the other headers of a failed request, `\Anthropic\Responses\Meta\MetaInformation::from($e->response?->getHeaders() ?? [])` builds the object `meta()` returns.
 
 A 429 for an organization that reached its tier's monthly spend cap carries no `Retry-After`; retrying won't help until access resumes.
 
