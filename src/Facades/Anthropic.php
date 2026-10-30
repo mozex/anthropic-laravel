@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Anthropic\Resources\Batches batches()
  * @method static \Anthropic\Resources\Files files()
  */
-final class Anthropic extends Facade
+class Anthropic extends Facade
 {
     /**
      * Get the registered name of the component.
@@ -29,9 +29,9 @@ final class Anthropic extends Facade
     }
 
     /**
-     * @param  array<array-key, ResponseContract|ResponseStreamContract|CompletionsStreamResponse|MessagesStreamResponse|string>  $responses
+     * @param  array<array-key, ResponseContract<array<array-key, mixed>>|ResponseStreamContract<mixed>|CompletionsStreamResponse|MessagesStreamResponse|string>  $responses
      */
-    public static function fake(array $responses = []): AnthropicFake /** @phpstan-ignore-line */
+    public static function fake(array $responses = []): AnthropicFake
     {
         $fake = new AnthropicFake($responses);
         self::swap($fake);

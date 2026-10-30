@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Anthropic\Laravel\Commands;
 
 use Anthropic\Laravel\ServiceProvider;

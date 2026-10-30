@@ -33,14 +33,20 @@ composer require mozex/anthropic-laravel
 php artisan anthropic:install
 ```
 
-The install command publishes `config/anthropic.php` and appends `ANTHROPIC_API_KEY=` to `.env`. Two keys, both env-backed:
+The install command publishes `config/anthropic.php` and appends `ANTHROPIC_API_KEY=` to `.env` and `.env.example`. Three keys, all env-backed:
 
 ```php
 return [
     'api_key' => env('ANTHROPIC_API_KEY'),
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
+    'beta' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('ANTHROPIC_BETA', ''))
+    ))),
 ];
 ```
+
+`ANTHROPIC_BETA` takes a comma-separated list of beta names (`ANTHROPIC_BETA=compact-2026-01-12`). They go out in the `anthropic-beta` header on every request, merged with any `betas` array you pass on a single call.
 
 If `ANTHROPIC_API_KEY` is missing when the client resolves, the deferred service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The binding is a singleton, so `Anthropic::messages()`, `app('anthropic')`, and `app(\Anthropic\Contracts\ClientContract::class)` all resolve the same instance.
 

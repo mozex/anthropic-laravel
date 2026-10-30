@@ -32,20 +32,25 @@ jobs:
       min: 100
 
   tests:
-    name: Tests P${{ matrix.php }} - L${{ matrix.laravel }} - Pest ${{ matrix.pest }} - ${{ matrix.dependency-version }}
+    name: Tests P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.dependency-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        php: [8.2, 8.3, 8.4]
-        laravel: [12, 13]
-        pest: [3, 4]
+        php: [8.2, 8.3, 8.4, 8.5]
+        laravel: [13.*, 12.*]
         dependency-version: [prefer-lowest, prefer-stable]
+        include:
+          - laravel: "12.*"
+            testbench: "10.*"
+            carbon: "^3.8.4"
+          - laravel: "13.*"
+            testbench: "^11.0"
+            carbon: "^3.8.4"
         exclude:
-          - php: 8.2
-            pest: 4
-          - laravel: '13'
-            php: 8.2
+          - laravel: "13.*"
+            php: "8.2"
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,7 +65,7 @@ jobs:
           coverage: none
 
       - name: Require dependencies
-        run: composer require "pestphp/pest:^${{ matrix.pest }}" "laravel/framework:^${{ matrix.laravel }}" --no-interaction --no-update --with-all-dependencies
+        run: composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" "nesbot/carbon:${{ matrix.carbon }}" --no-interaction --no-update
 
       - name: Install dependencies
         run: composer update --${{ matrix.dependency-version }} --prefer-dist --no-interaction --no-progress

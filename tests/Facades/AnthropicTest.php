@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;

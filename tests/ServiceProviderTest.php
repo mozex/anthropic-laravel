@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;

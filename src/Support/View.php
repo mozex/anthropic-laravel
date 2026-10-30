@@ -13,7 +13,7 @@ use function Termwind\renderUsing;
 /**
  * @internal
  */
-final class View
+class View
 {
     /**
      * The implementation of the output.

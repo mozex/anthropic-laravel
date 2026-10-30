@@ -1,6 +1,4 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# anthropic-laravel
 
 ## Project
 
@@ -10,15 +8,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 composer lint             # Fix code style with Pint
-composer test             # Run ALL checks: lint, types, unit tests
+composer test             # Run ALL checks: lint, types, type coverage, unit tests
 composer test:lint        # Check code style without fixing
 composer test:types       # Run PHPStan (level max)
+composer test:type-coverage  # Verify 100% type coverage
 composer test:unit        # Run Pest unit tests
 ```
 
 Run a single test file:
 ```bash
-./vendor/bin/pest tests/Facades/Anthropic.php
+./vendor/bin/pest tests/Facades/AnthropicTest.php
 ```
 
 Run tests by name:
@@ -37,26 +36,26 @@ Small package with 6 source files in `src/`:
 - **`Commands/InstallCommand.php`** — `php artisan anthropic:install`. Copies config, appends env vars to `.env`/`.env.example`, then asks for a GitHub star (default yes). Uses Termwind for console output via `Support/View.php`. A run nobody can answer (`--no-interaction`, or no terminal on stdin, as with CI and AI agents) skips the question, takes the default, and prints a note explaining the browser tab. `isInteractive()` treats unit tests as interactive, like Laravel's own prompt rule, so the tests are deterministic. The question uses `$this->confirm()`, not Laravel Prompts: the earlier `callSilent('vendor:publish')` reconfigures Prompts' global output to a `NullOutput`, which would make a Prompts question invisible. The browser opens through the `Process` facade (backgrounded on Linux, where `xdg-open` without a detected desktop runs the browser in the foreground), and any failure prints the URL instead.
 - **`Support/View.php`** — Termwind console view renderer using PHP templates from `resources/views/components/`.
 
-**Config** (`config/anthropic.php`): `anthropic.api_key` (env `ANTHROPIC_API_KEY`), `anthropic.request_timeout` (env `ANTHROPIC_REQUEST_TIMEOUT`, default `30`).
+**Config** (`config/anthropic.php`): `anthropic.api_key` (env `ANTHROPIC_API_KEY`), `anthropic.request_timeout` (env `ANTHROPIC_REQUEST_TIMEOUT`, default `30`), `anthropic.beta` (env `ANTHROPIC_BETA`, a comma-separated list the provider joins into a global `anthropic-beta` header).
 
-**Underlying client** (`mozex/anthropic-php`) exposes `->messages()`, `->completions()`, `->models()`, and `->batches()`.
+**Underlying client** (`mozex/anthropic-php`) exposes `->messages()`, `->completions()`, `->models()`, `->batches()`, and `->files()`.
 
 ## Code Conventions
 
 - All files use `declare(strict_types=1)`
-- All classes are `final`
+- No class is `final`: users extend package classes
 - Non-public-API classes use `@internal` docblock
 - No debugging statements: `dd`, `ddd`, `dump`, `ray`, `die`, `var_dump`, `print_r`
-- PHPStan at level `max` on `src/` — no baseline
+- PHPStan at level `max` on `src/` and `config/`, with Larastan — no baseline. The one ignore is Larastan's `noEnvCallsOutsideOfConfig` for `config/anthropic.php`, where `env()` belongs
 - Pint with default Laravel ruleset (no `pint.json`)
 
 ## Testing
 
-Tests use **Pest** syntax with `expect()` assertions.
+Tests use **Pest** syntax with `expect()` assertions. Every test file ends in `Test.php`: `phpunit.xml.dist` lists `tests` without a suffix, so PHPUnit's default `Test.php` applies and any other file there is silently skipped (a test in `tests/ArchTest.php` fails on one). `tests/Pest.php` binds nothing: the facade and provider tests build their own container.
 
-Architecture tests in `tests/Arch.php` enforce namespace dependency boundaries — each namespace declares which imports are allowed.
+Architecture tests in `tests/ArchTest.php` enforce namespace dependency boundaries — each namespace declares which imports are allowed.
 
-`tests/Commands/InstallCommand.php` runs the install command through Orchestra Testbench (`tests/TestCase.php` registers the provider); it's the only file bound to that TestCase. It fakes `Process`, so no test opens a real browser, and restores the testbench skeleton's `.env.example` afterwards.
+`tests/InstallCommandTest.php` runs the install command through Orchestra Testbench (`tests/TestCase.php` registers the provider); it's the only file bound to that TestCase. It fakes `Process`, so no test opens a real browser, and restores the testbench skeleton's `.env.example` afterwards.
 
 Facade fake pattern:
 ```php
@@ -67,4 +66,4 @@ Anthropic::assertSent(Messages::class, fn (string $method, array $parameters) =>
 
 ## CI
 
-Tests run across: PHP 8.2/8.3/8.4, Laravel 12/13, Pest 3/4, prefer-lowest/prefer-stable.
+Tests run across: PHP 8.2-8.5, Laravel 12/13 (with their testbench and carbon versions; Laravel 13 skips PHP 8.2), prefer-lowest/prefer-stable. There's no Pest dimension: prefer-stable cells get the newest Pest major each PHP version allows, prefer-lowest cells the oldest one that resolves (Pest 3 with Laravel 12).

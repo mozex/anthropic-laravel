@@ -15,7 +15,7 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 /**
  * @internal
  */
-final class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
+class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
 {
     /**
      * Register any application services.
