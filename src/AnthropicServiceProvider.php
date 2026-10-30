@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Anthropic\Laravel;
 
+use Anthropic\Laravel\Events\UsageRecorded;
+use Anthropic\Laravel\Ledger\RecordUsage;
 use Anthropic\Laravel\Queue\ThrottleScope;
 use Anthropic\Laravel\Support\About;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -13,8 +15,8 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 /**
  * The eager provider: what must exist before the client is ever resolved, the listeners that forget the manager's
- * connections, the `about` section and `ThrottlesAnthropic`'s scope. The client, the manager, the config and the
- * commands stay in the deferred `ServiceProvider`.
+ * connections, the ledger's listener (with `anthropic.ledger.enabled`), the `about` section and `ThrottlesAnthropic`'s
+ * scope. The client, the manager, the config and the commands stay in the deferred `ServiceProvider`.
  *
  * @internal
  */
@@ -46,6 +48,11 @@ class AnthropicServiceProvider extends BaseServiceProvider
 
         $events->listen(Looping::class, $forget);
         $events->listen('Laravel\Octane\Contracts\OperationTerminated', $forget);
+
+        // Only with the ledger on, so an app without it never reaches for the table.
+        if (config('anthropic.ledger.enabled') === true) {
+            $events->listen(UsageRecorded::class, RecordUsage::class);
+        }
 
         // Read only when `php artisan about` runs.
         if ($this->app->runningInConsole()) {

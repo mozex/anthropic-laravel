@@ -226,7 +226,7 @@ test("Nightwatch's middleware runs on every attempt when it's installed, unless 
     "Laravel's client on" => [['anthropic.http.laravel_client' => true], 0],
 ]);
 
-test('a streamed answer is recorded without its body, and adds its request ID but no tokens', function () {
+test('a streamed answer is recorded without its body, and adds its request ID, and its tokens once it ends', function () {
     config(['anthropic.context' => true, 'anthropic.http.telescope' => true]);
     Telescope::startRecording(false);
     $stream = file_get_contents(__DIR__.'/../vendor/mozex/anthropic-php/src/Testing/Responses/Fixtures/Messages/CreateStreamedResponseFixture.txt');
@@ -237,7 +237,9 @@ test('a streamed answer is recorded without its body, and adds its request ID bu
     expect($types)->toContain('message_start', 'message_delta')
         ->and(Telescope::$entriesQueue[0]->content['response'])->toBe('Stream Response')
         ->and(Context::get('anthropic_request_ids'))->toBe(['req_018EeWyXxfu5pfWkrYcMdjWG'])
-        ->and(Context::has('anthropic_input_tokens'))->toBeFalse();
+        // the fixture's message_start and message_delta
+        ->and(Context::get('anthropic_input_tokens'))->toBe(14)
+        ->and(Context::get('anthropic_output_tokens'))->toBe(15);
 });
 
 test('telescope purges a JSON answer over 64 KB', function () {

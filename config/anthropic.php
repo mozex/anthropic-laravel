@@ -161,6 +161,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Usage Ledger
+    |--------------------------------------------------------------------------
+    |
+    | Writes every billed Messages call (and batch result) to the
+    | `anthropic_requests` table, with its tokens and who `Anthropic::for()`
+    | billed it to, never a price. Publish and run the migration first:
+    | php artisan vendor:publish --tag=anthropic-migrations. Rows are written
+    | on the queue (`queue` picks one) and pruned after `prune_after_days`
+    | (0 keeps them all) by `php artisan model:prune --model="Anthropic\Laravel\Ledger\AnthropicRequest"`.
+    */
+
+    'ledger' => [
+        'enabled' => (bool) env('ANTHROPIC_LEDGER', false),
+        'queue' => env('ANTHROPIC_LEDGER_QUEUE'),
+        'prune_after_days' => env('ANTHROPIC_LEDGER_PRUNE_DAYS', 90),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Extra Headers
     |--------------------------------------------------------------------------
     |

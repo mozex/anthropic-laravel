@@ -6,6 +6,7 @@ namespace Anthropic\Laravel\Batches;
 
 use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Events\BatchSubmitted;
+use Anthropic\Laravel\Ledger\Attribution;
 use Anthropic\Responses\Batches\BatchResponse;
 use Anthropic\Testing\ClientFake;
 use Closure;
@@ -192,8 +193,8 @@ class PendingBatch
     private function job(string $id, int $expiresAt, ?string $sealed): PollBatch
     {
         $job = $this->connection->apiKey() === null
-            ? new PollBatch($id, $this->connection->name, $this->every, $expiresAt, $this->then, $this->catch, $sealed)
-            : new PollBatchWithKey($id, $this->connection->name, $this->every, $expiresAt, $this->then, $this->catch, $sealed);
+            ? new PollBatch($id, $this->connection->name, $this->every, $expiresAt, $this->then, $this->catch, $sealed, Attribution::current())
+            : new PollBatchWithKey($id, $this->connection->name, $this->every, $expiresAt, $this->then, $this->catch, $sealed, Attribution::current());
 
         $job->timeout = $this->timeout;
 

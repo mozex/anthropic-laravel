@@ -6,7 +6,9 @@ namespace Anthropic\Laravel;
 
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic\Laravel\Ledger\Attribution;
 use Anthropic\Laravel\Testing\AnthropicFake;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\MultipleInstanceManager;
 use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
@@ -103,6 +105,18 @@ class AnthropicManager extends MultipleInstanceManager
 
         // The connection keeps the key, so a batch sent through it is polled with it too.
         return new Connection($client, self::DEFAULT, $apiKey);
+    }
+
+    /**
+     * Bills the calls after this one, in this request or job and the jobs it dispatches, to `$billable`, tagged with
+     * `$feature`, in the usage ledger and `UsageRecorded`: `Anthropic::for($user, feature: 'summaries')->messages()`.
+     * Kept in hidden Context, so it stays out of the logs; `Anthropic::for(null)` clears it.
+     */
+    public function for(?Model $billable, ?string $feature = null): static
+    {
+        Attribution::set($billable, $feature);
+
+        return $this;
     }
 
     /**

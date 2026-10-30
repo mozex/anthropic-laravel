@@ -7,6 +7,7 @@ namespace Anthropic\Laravel;
 use Anthropic\Client;
 use Anthropic\Factory;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use Anthropic\Laravel\Ledger\RecordsStreamUsage;
 use Anthropic\Laravel\Middleware\AddsToContext;
 use Anthropic\Laravel\Middleware\DispatchesEvents;
 use Anthropic\Laravel\Middleware\RecordsInTelescope;
@@ -58,7 +59,7 @@ class ClientBuilder
             'http_client' => self::httpClient($app, $config),
             // Applied last, so a header set here wins over the ones the keys above produce.
             'headers' => $config['headers'] ?? [],
-        ])->make();
+        ])->withStreamCompletionHandler(self::streamUsage($app, $config, $connection)(...))->make();
     }
 
     /**
@@ -164,6 +165,20 @@ class ClientBuilder
             ...$middleware,
             ...self::resolveMiddleware($app, $config['middleware'] ?? [], 'Each anthropic.middleware entry must be a client middleware: an invokable class name or a callable.'),
         ];
+    }
+
+    /**
+     * What a stream used, recorded once it ends or is dropped.
+     *
+     * @param  array<array-key, mixed>  $config
+     */
+    private static function streamUsage(Container $app, array $config, string $connection): RecordsStreamUsage
+    {
+        return new RecordsStreamUsage(
+            static fn (): ?Dispatcher => $app->bound(Dispatcher::class) ? $app->make(Dispatcher::class) : null,
+            $connection,
+            ($config['context'] ?? null) === true ? static fn (): Context => $app->make(Context::class) : null,
+        );
     }
 
     /**

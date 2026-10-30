@@ -49,9 +49,11 @@ arch('middleware')
         'Illuminate\Http\Client',
         'Illuminate\Log\Context\Repository',
         'Illuminate\Support\Arr',
+        'Illuminate\Support\Facades\Date',
         'Laravel\Telescope\IncomingEntry',
         'Laravel\Telescope\Telescope',
         'Psr\Http\Message',
+        'Anthropic\Laravel\Ledger\Attribution',
     ]);
 
 arch('service providers')
@@ -71,6 +73,7 @@ arch('service providers')
         // helpers...
         'config',
         'config_path',
+        'database_path',
     ]);
 
 arch('the connection manager')
@@ -80,6 +83,7 @@ arch('the connection manager')
         'Anthropic\Laravel',
         'Illuminate\Support\MultipleInstanceManager',
         'Illuminate\Support\Traits\Macroable',
+        'Illuminate\Database\Eloquent\Model',
         'InvalidArgumentException',
     ]);
 

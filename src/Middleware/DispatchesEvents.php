@@ -10,6 +10,8 @@ use Anthropic\Laravel\Events\RateLimited;
 use Anthropic\Laravel\Events\RequestFailed;
 use Anthropic\Laravel\Events\RequestSending;
 use Anthropic\Laravel\Events\ResponseReceived;
+use Anthropic\Laravel\Events\UsageRecorded;
+use Anthropic\Laravel\Ledger\Attribution;
 use Anthropic\Laravel\Middleware\Concerns\ReadsMessages;
 use Anthropic\Responses\Meta\MetaInformation;
 use Closure;
@@ -22,6 +24,7 @@ use Illuminate\Http\Client\Events\RequestSending as LaravelRequestSending;
 use Illuminate\Http\Client\Events\ResponseReceived as LaravelResponseReceived;
 use Illuminate\Http\Client\Request as LaravelRequest;
 use Illuminate\Http\Client\Response as LaravelResponse;
+use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Testing\Fakes\Fake;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
@@ -55,7 +58,7 @@ class DispatchesEvents
         $events = ($this->events)();
         $listening = [];
 
-        foreach ([RequestSending::class, ResponseReceived::class, RequestFailed::class, RateLimited::class] as $event) {
+        foreach ([RequestSending::class, ResponseReceived::class, RequestFailed::class, RateLimited::class, UsageRecorded::class] as $event) {
             if ($events instanceof Fake || $events->hasListeners($event)) {
                 $listening[$event] = true;
             }
@@ -124,6 +127,11 @@ class DispatchesEvents
                 $meta->toArray(),
                 $duration,
             ));
+        }
+
+        // A billed Messages answer; a stream records its usage once it ends, through the client's completion handler.
+        if (isset($listening[UsageRecorded::class]) && $status === 200 && is_array($body['usage'] ?? null) && str_ends_with($request->getUri()->getPath(), '/messages')) {
+            $events->dispatch(new UsageRecorded($this->connection, is_string($body['model'] ?? null) ? $body['model'] : null, $meta->requestId, $body['usage'], $duration, false, true, ...Attribution::current(), at: Date::now()->getTimestamp()));
         }
 
         if ($status >= 400) {

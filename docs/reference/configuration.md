@@ -65,6 +65,9 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 | `ANTHROPIC_HTTP_TELESCOPE` | `false` | Record each call in Telescope, tagged with the model and the request ID |
 | `ANTHROPIC_HTTP_NIGHTWATCH` | `true` | Attach Nightwatch's middleware when Nightwatch is installed |
 | `ANTHROPIC_CONTEXT` | `false` | Add each answer's request ID and token counts to Laravel's Context |
+| `ANTHROPIC_LEDGER` | `false` | Write every billed call to the [usage ledger](../usage/usage-ledger.md) |
+| `ANTHROPIC_LEDGER_QUEUE` | The default queue | The queue the ledger's rows are written on |
+| `ANTHROPIC_LEDGER_PRUNE_DAYS` | `90` | How long `model:prune` keeps the ledger's rows |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
 | `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
@@ -129,6 +132,8 @@ Guzzle middleware sees every attempt, retries included.
 
 ## Events
 
+A billed Messages call also dispatches `UsageRecorded`, with its tokens and who [`Anthropic::for()`](../usage/usage-ledger.md#billing-calls-to-someone) billed it to, whether the [usage ledger](../usage/usage-ledger.md) is on or not.
+
 Every HTTP attempt dispatches events in `Anthropic\Laravel\Events`: `RequestSending`, then `ResponseReceived` with the status, the decoded body, the `usage`, the rate-limit `meta` and `durationMs`. A failure dispatches `RequestFailed` (an error status, or a connection failure with a null status), and a 429 also dispatches `RateLimited`, whose `errorCode` is `enforced_spend_limit_reached` for the monthly spend cap. Every value is a scalar or an array, so a queued listener can take them, and no credential is in them: no header that holds one (the key, a token, a gateway key), and no MCP server's `authorization_token` from the body. Register listeners in a service provider's `boot()`:
 
 ```php
@@ -167,7 +172,7 @@ For OpenTelemetry spans with the GenAI attributes, add the client's `OpenTelemet
 
 ## Context
 
-With `ANTHROPIC_CONTEXT=true`, every answer adds its request ID to Laravel's [Context](https://laravel.com/docs/13.x/context), and a non-streamed answer adds its token counts:
+With `ANTHROPIC_CONTEXT=true`, every answer adds its request ID to Laravel's [Context](https://laravel.com/docs/13.x/context), and a Messages answer adds its token counts:
 
 ```php
 use Illuminate\Support\Facades\Context;
@@ -177,7 +182,7 @@ Context::get('anthropic_input_tokens');  // 10
 Context::get('anthropic_output_tokens'); // 20
 ```
 
-Context goes into every log line written after the call and travels with the jobs you dispatch, so a user's complaint leads you to the request IDs Anthropic support asks for. It changes your log output, so it's off by default. Each retry and fallback hop adds its own ID, and an error answer adds its ID too. The list keeps the last 20 IDs, so a job that makes thousands of calls doesn't grow its log lines without end. The token counts are the `input_tokens` and `output_tokens` of non-streamed Messages answers, cache tokens apart; a streamed answer adds none.
+Context goes into every log line written after the call and travels with the jobs you dispatch, so a user's complaint leads you to the request IDs Anthropic support asks for. It changes your log output, so it's off by default. Each retry and fallback hop adds its own ID, and an error answer adds its ID too. The list keeps the last 20 IDs, so a job that makes thousands of calls doesn't grow its log lines without end. The token counts are the `input_tokens` and `output_tokens` of Messages answers, cache tokens apart; a stream adds its counts once it ends.
 
 ### Replying in the user's language
 

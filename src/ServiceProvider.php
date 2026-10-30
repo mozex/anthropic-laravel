@@ -13,6 +13,7 @@ use Anthropic\Laravel\Commands\DoctorCommand;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Anthropic\Laravel\Commands\ModelsCommand;
 use Anthropic\Laravel\Commands\PingCommand;
+use Anthropic\Laravel\Commands\UsageCommand;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\DeferrableProvider;
@@ -55,6 +56,10 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 __DIR__.'/../config/anthropic.php' => config_path('anthropic.php'),
             ], 'anthropic-config');
 
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations' => database_path('migrations'),
+            ], 'anthropic-migrations');
+
             $this->commands([
                 InstallCommand::class,
                 DoctorCommand::class,
@@ -63,6 +68,7 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 CountTokensCommand::class,
                 ChatCommand::class,
                 ModelsCommand::class,
+                UsageCommand::class,
             ]);
         }
     }

@@ -39,6 +39,7 @@ class InstallCommand extends Command
         'ANTHROPIC_HTTP_TELESCOPE' => '# ANTHROPIC_HTTP_TELESCOPE=',
         'ANTHROPIC_HTTP_NIGHTWATCH' => '# ANTHROPIC_HTTP_NIGHTWATCH=',
         'ANTHROPIC_CONTEXT' => '# ANTHROPIC_CONTEXT=',
+        'ANTHROPIC_LEDGER' => '# ANTHROPIC_LEDGER=',
     ];
 
     protected $signature = 'anthropic:install';

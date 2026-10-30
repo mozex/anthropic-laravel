@@ -1,5 +1,15 @@
 # Upgrading
 
+## To 1.14.0
+
+This release requires `mozex/anthropic-php` 1.14. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1140) as well.
+
+### Streams Add Their Tokens To Context
+
+**Likelihood Of Impact: Low**
+
+With `ANTHROPIC_CONTEXT=true`, a stream now adds its `anthropic_input_tokens` and `anthropic_output_tokens` to Context once it ends, as a non-streamed answer always did, so the counts include streamed calls. The config has a new `ledger` array, which `anthropic:install` names for a config published by an older release.
+
 ## To 1.13.0
 
 This release requires `mozex/anthropic-php` 1.13. Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1130) as well.

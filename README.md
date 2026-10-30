@@ -30,6 +30,7 @@ The Claude companion for Laravel. It puts the [Anthropic API](https://platform.c
   - [Files](https://mozex.dev/docs/anthropic-laravel/v1/usage/files)
   - [Completions](https://mozex.dev/docs/anthropic-laravel/v1/usage/completions)
   - [Raw Requests](https://mozex.dev/docs/anthropic-laravel/v1/usage/raw-requests)
+  - [Usage Ledger](https://mozex.dev/docs/anthropic-laravel/v1/usage/usage-ledger)
 - Reference
   - [Configuration](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration)
   - [Error Handling](https://mozex.dev/docs/anthropic-laravel/v1/reference/error-handling)
@@ -75,6 +76,8 @@ Anthropic::assertSent(Messages::class, function (string $method, array $paramete
 **Named connections and tenant keys.** `Anthropic::connection('support')` gives a client of its own settings, `Anthropic::withApiKey($tenant->anthropic_key)` one for a key known only at runtime, and `Anthropic::organization()` the Admin API's. [See connections →](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration#connections)
 
 **Your logs, Telescope and Nightwatch see the calls.** Every request dispatches events without a credential in them, a logged API error carries its request ID, Context can carry the IDs into every log line, Telescope can record tagged entries, and Nightwatch picks the calls up on its own. [See the configuration docs →](https://mozex.dev/docs/anthropic-laravel/v1/reference/configuration#context)
+
+**A usage ledger of your own.** With `ANTHROPIC_LEDGER=true`, every billed call, stream and batch result writes its tokens to a table, billed to who `Anthropic::for($user, feature: 'summaries')` named, and `php artisan anthropic:usage` sums it by model, feature, user or day. [See the usage ledger →](https://mozex.dev/docs/anthropic-laravel/v1/usage/usage-ledger)
 
 **Queued jobs that know Claude's errors.** `ThrottlesAnthropic` job middleware fails a job on the monthly spend cap (with a `SpendCapReached` event) and on errors a retry can't fix, releases it on rate limits and overloads for as long as the API asks, and holds back every job of the same model key meanwhile. [See retries →](https://mozex.dev/docs/anthropic-laravel/v1/reference/error-handling#retrying-failed-jobs)
 

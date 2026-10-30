@@ -10,6 +10,8 @@ use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Events\BatchEnded;
 use Anthropic\Laravel\Events\BatchResultReceived;
+use Anthropic\Laravel\Events\UsageRecorded;
+use Anthropic\Laravel\Ledger\AnthropicRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -24,9 +26,10 @@ use Throwable;
 
 /**
  * Polls a Message Batch through the connection that created it, releasing itself until the batch ends, each wait
- * twice the last up to 15 minutes; then it dispatches a `BatchResultReceived` event per result and `BatchEnded`, and
- * runs the `then()` callbacks. One per batch (`ShouldBeUnique`), so a second dispatch can't poll the same batch twice.
- * A key or options it polls with are encrypted in `$sealed`, so nothing that reads its properties sees them.
+ * twice the last up to 15 minutes; then it dispatches a `BatchResultReceived` event per result (and `UsageRecorded`
+ * per succeeded one, with the ledger's rows inserted in chunks) and `BatchEnded`, and runs the `then()` callbacks. One
+ * per batch (`ShouldBeUnique`), so a second dispatch can't poll the same batch twice. A key or options it polls with
+ * are encrypted in `$sealed`, so nothing that reads its properties sees them.
  */
 class PollBatch implements ShouldBeUnique, ShouldQueue
 {
@@ -48,6 +51,8 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
      * @param  list<SerializableClosure|callable>  $then
      * @param  list<SerializableClosure|callable>  $catch
      * @param  string|null  $sealed  the `withApiKey()` key and the `withOptions()` options, through `Crypt::encrypt()`
+     * @param  array{billableType?: ?string, billableId?: int|string|null, feature?: ?string}  $attribution  what
+     *                                                                                                       `Anthropic::for()` set when the batch was sent
      */
     public function __construct(
         public readonly string $messageBatchId,
@@ -57,6 +62,7 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
         protected readonly array $then = [],
         protected readonly array $catch = [],
         protected readonly ?string $sealed = null,
+        protected readonly array $attribution = [],
     ) {}
 
     public function uniqueId(): string
@@ -117,8 +123,49 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
             return;
         }
 
+        // With the ledger on, the results' rows go in with a few inserts, not a queued job each.
+        $ledger = config('anthropic.ledger.enabled') === true;
+        $rows = [];
+
         foreach ($results ?? [] as $individual) {
             $events->dispatch(new BatchResultReceived($this->anthropicConnection, $this->messageBatchId, $individual->customId, $individual->result->toArray()));
+
+            $message = $individual->result->message;
+
+            if ($message === null) {
+                continue;
+            }
+
+            $usage = new UsageRecorded(
+                connection: $this->anthropicConnection,
+                model: $message->model,
+                requestId: null,
+                usage: $message->usage->toArray(),
+                durationMs: null,
+                batch: true,
+                completed: true,
+                billableType: $this->attribution['billableType'] ?? null,
+                billableId: $this->attribution['billableId'] ?? null,
+                feature: $this->attribution['feature'] ?? null,
+                batchId: $this->messageBatchId,
+                customId: $individual->customId,
+                at: Date::now()->getTimestamp(),
+            );
+            $events->dispatch($usage);
+
+            if ($ledger) {
+                $rows[] = AnthropicRequest::rowFrom($usage);
+            }
+
+            // 100 rows keep an insert's bound parameters under SQL Server's 2,100.
+            if (count($rows) === 100) {
+                $ledger = self::insert($rows);
+                $rows = [];
+            }
+        }
+
+        if ($ledger && $rows !== []) {
+            self::insert($rows);
         }
 
         $events->dispatch(new BatchEnded($this->anthropicConnection, $this->messageBatchId, $batch->toArray()));
@@ -173,6 +220,24 @@ class PollBatch implements ShouldBeUnique, ShouldQueue
     private function longestWait(): int
     {
         return max($this->every, 900);
+    }
+
+    /**
+     * Writes ledger rows, best effort: a failed insert is reported and ends the ledger's part, never the batch's.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private static function insert(array $rows): bool
+    {
+        try {
+            AnthropicRequest::query()->insert($rows);
+
+            return true;
+        } catch (Throwable $e) {
+            report($e);
+
+            return false;
+        }
     }
 
     /**

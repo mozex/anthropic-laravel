@@ -127,6 +127,7 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Token Counting](./usage/token-counting.md): Count tokens before sending
 - [Models](./usage/models.md): List and inspect available models
 - [Batches](./usage/batches.md): Process large volumes of requests asynchronously
+- [Usage Ledger](./usage/usage-ledger.md): Record every call's tokens, billed to a user, team or feature
 - [Files](./usage/files.md): Upload documents once, reference them by `file_id` in later requests
 - [Completions](./usage/completions.md): The deprecated Text Completions API
 - [Raw Requests](./usage/raw-requests.md): Call an endpoint the package has no method for yet
