@@ -22,6 +22,7 @@ arch('facades')
         'Anthropic\Contracts\ClientContract',
         'Anthropic\Contracts\ResponseContract',
         'Anthropic\Contracts\ResponseStreamContract',
+        'Anthropic\Laravel\AnthropicManager',
         'Anthropic\Laravel\Testing\AnthropicFake',
         'Anthropic\Responses\Completions\StreamResponse',
         'Anthropic\Responses\Messages\StreamResponse',
@@ -47,23 +48,50 @@ arch('middleware')
     ]);
 
 arch('service providers')
-    ->expect('Anthropic\Laravel\ServiceProvider')
+    ->expect(['Anthropic\Laravel\ServiceProvider', 'Anthropic\Laravel\AnthropicServiceProvider'])
     ->toOnlyUse([
+        'Illuminate\Contracts\Container\Container',
+        'Illuminate\Contracts\Events\Dispatcher',
+        'Illuminate\Contracts\Foundation\Application',
+        'Illuminate\Queue\Events\Looping',
+        'Illuminate\Support\ServiceProvider',
+        'Anthropic\Laravel',
+        'Anthropic\Client',
+        'Anthropic\Contracts\ClientContract',
+        'Illuminate\Contracts\Support\DeferrableProvider',
+
+        // helpers...
+        'config',
+        'config_path',
+    ]);
+
+arch('the connection manager')
+    ->expect('Anthropic\Laravel\AnthropicManager')
+    ->toOnlyUse([
+        'Anthropic\Contracts\ClientContract',
+        'Anthropic\Laravel',
+        'Illuminate\Support\MultipleInstanceManager',
+        'Illuminate\Support\Traits\Macroable',
+        'InvalidArgumentException',
+    ]);
+
+arch('the client builder')
+    ->expect('Anthropic\Laravel\ClientBuilder')
+    ->toOnlyUse([
+        'Anthropic\Client',
+        'Anthropic\Factory',
+        'Anthropic\Laravel',
+        'Anthropic\Middleware\RefusalFallbackMiddleware',
         'GuzzleHttp\Client',
         'GuzzleHttp\HandlerStack',
         'Illuminate\Contracts\Container\Container',
         'Illuminate\Contracts\Events\Dispatcher',
         'Illuminate\Http\Client\Factory',
-        'Illuminate\Support\ServiceProvider',
-        'Psr\Http\Message\RequestInterface',
-        'Anthropic\Laravel',
-        'Anthropic',
-        'Illuminate\Contracts\Support\DeferrableProvider',
         'InvalidArgumentException',
+        'Psr\Http\Message\RequestInterface',
 
         // helpers...
         'config',
-        'config_path',
     ]);
 
 test('every test file ends in Test.php', function () {

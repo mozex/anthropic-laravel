@@ -4,21 +4,13 @@ declare(strict_types=1);
 
 namespace Anthropic\Laravel;
 
-use Anthropic;
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\InstallCommand;
-use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
-use Anthropic\Laravel\Middleware\DispatchesEvents;
-use Anthropic\Middleware\RefusalFallbackMiddleware;
-use GuzzleHttp\HandlerStack;
 use Illuminate\Contracts\Container\Container;
-use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\DeferrableProvider;
-use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
-use InvalidArgumentException;
-use Psr\Http\Message\RequestInterface;
 
 /**
  * @internal
@@ -31,142 +23,16 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
     public function register(): void
     {
         $this->app->singleton(ClientContract::class, static function (Container $app): Client {
-            $apiKey = config('anthropic.api_key');
-            $authToken = self::nonBlankString(config('anthropic.auth_token'));
+            $config = config('anthropic', []);
+            $config = is_array($config) ? $config : [];
+            unset($config['connections']);
 
-            if (! is_string($apiKey) && $authToken === null) {
-                throw ApiKeyIsMissing::create();
-            }
+            return ClientBuilder::make($app, ClientBuilder::withLaravelAi($config), AnthropicManager::DEFAULT);
+        });
 
-            $guzzleOptions = ['timeout' => config('anthropic.request_timeout', 30)];
-            $connectTimeout = config('anthropic.connect_timeout');
-
-            if (is_numeric($connectTimeout) && (float) $connectTimeout > 0) {
-                $guzzleOptions['connect_timeout'] = (float) $connectTimeout;
-            }
-
-            $stack = HandlerStack::create();
-            $middleware = config('anthropic.http.middleware', []);
-
-            if (is_string($middleware)) {
-                $middleware = [$middleware];
-            }
-
-            foreach (is_array($middleware) ? $middleware : [] as $entry) {
-                $resolved = is_string($entry) ? $app->make($entry) : $entry;
-
-                if (! is_callable($resolved)) {
-                    throw new InvalidArgumentException('Each anthropic.http.middleware entry must be a Guzzle middleware: an invokable class name or a callable.');
-                }
-
-                $stack->push($resolved);
-            }
-
-            if (config('anthropic.http.laravel_client') === true) {
-                // Innermost, and built on each attempt from the HTTP factory of that moment, so an Http::fake() or
-                // Http::preventStrayRequests() set after the client was built still applies, and the app's own
-                // middleware runs before the fake answers. Laravel's own events come from DispatchesEvents, in pairs.
-                $stack->push(static fn (callable $handler): callable => static function (RequestInterface $request, array $options) use ($app, $handler) {
-                    $http = $app->make(HttpFactory::class);
-                    $pending = $http->createPendingRequest();
-                    $laravel = new HandlerStack($handler);
-
-                    foreach ($http->getGlobalMiddleware() as $global) {
-                        if (is_callable($global)) {
-                            $laravel->push($global);
-                        }
-                    }
-
-                    $laravel->push($pending->buildRecorderHandler());
-                    $laravel->push($pending->buildStubHandler());
-
-                    return $laravel($request, $options);
-                });
-            }
-
-            $guzzleOptions['handler'] = $stack;
-
-            $factory = Anthropic::factory()->withHttpClient(new \GuzzleHttp\Client($guzzleOptions));
-
-            $fallbackModels = config('anthropic.fallback_models', []);
-
-            // A config written by hand as env('ANTHROPIC_FALLBACK_MODELS') gives the comma-separated string itself.
-            if (is_string($fallbackModels)) {
-                $fallbackModels = explode(',', $fallbackModels);
-            }
-
-            $fallbackModels = array_values(array_filter(array_map(
-                static fn (mixed $model): string => is_string($model) ? trim($model) : '',
-                is_array($fallbackModels) ? $fallbackModels : [],
-            )));
-
-            if ($fallbackModels !== []) {
-                // No shared FallbackState: a worker's singleton would pin every user to a fallback after one refusal.
-                $factory = $factory->withMiddleware(new RefusalFallbackMiddleware($fallbackModels));
-            }
-
-            // After the fallback, so each of its attempts is an event of its own.
-            if ($app->bound(Dispatcher::class)) {
-                $factory = $factory->withMiddleware(new DispatchesEvents(static fn (): Dispatcher => $app->make(Dispatcher::class), 'default', config('anthropic.http.laravel_events') === true));
-            }
-
-            $maxRetries = config('anthropic.max_retries');
-
-            if (is_numeric($maxRetries) && (int) $maxRetries > 0) {
-                $factory = $factory->withMaxRetries((int) $maxRetries);
-            }
-
-            // One credential, as in the official SDKs: the key when one is set, the token otherwise. A token
-            // exported in the shell for another tool then never rides along with the app's key.
-            if (is_string($apiKey) && (trim($apiKey) !== '' || $authToken === null)) {
-                $factory = $factory->withApiKey($apiKey);
-            } elseif ($authToken !== null) {
-                $factory = $factory->withAuthToken($authToken);
-            }
-
-            $workspaceId = self::nonBlankString(config('anthropic.workspace_id'));
-
-            if ($workspaceId !== null) {
-                $factory = $factory->withWorkspaceId($workspaceId);
-            }
-
-            $beta = config('anthropic.beta', []);
-
-            if (is_array($beta) && $beta !== []) {
-                $betaHeader = implode(',', array_filter(array_map(
-                    static fn (mixed $value): string => is_string($value) ? trim($value) : '',
-                    $beta,
-                )));
-
-                if ($betaHeader !== '') {
-                    $factory = $factory->withHttpHeader('anthropic-beta', $betaHeader);
-                }
-            }
-
-            // A blank value, such as an empty ANTHROPIC_API_VERSION= line in .env, keeps the client's default.
-            $apiVersion = self::nonBlankString(config('anthropic.api_version'));
-
-            if ($apiVersion !== null) {
-                $factory = $factory->withApiVersion($apiVersion);
-            }
-
-            $baseUrl = self::nonBlankString(config('anthropic.base_url'));
-
-            if ($baseUrl !== null) {
-                // ANTHROPIC_BASE_URL leaves out the API's /v1, as the official SDKs read it; withBaseUrl() adds it.
-                $factory = $factory->withBaseUrl($baseUrl);
-            }
-
-            // Applied last, so a header set here wins over the ones the keys above produce.
-            $headers = config('anthropic.headers', []);
-
-            foreach (is_array($headers) ? $headers : [] as $name => $value) {
-                if (is_string($name) && (is_string($value) || is_int($value) || is_float($value))) {
-                    $factory = $factory->withHttpHeader($name, (string) $value);
-                }
-            }
-
-            return $factory->make();
+        $this->app->singleton(AnthropicManager::class, static function (Container $app): AnthropicManager {
+            /** @var Application $app */
+            return new AnthropicManager($app);
         });
 
         $this->app->alias(ClientContract::class, 'anthropic');
@@ -200,14 +66,7 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
             Client::class,
             ClientContract::class,
             'anthropic',
+            AnthropicManager::class,
         ];
-    }
-
-    /**
-     * A config value that is a non-blank string, trimmed, or null.
-     */
-    private static function nonBlankString(mixed $value): ?string
-    {
-        return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
 }

@@ -1,6 +1,6 @@
 ---
 name: anthropic-laravel
-description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::request()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), computer and browser toolsets, extended thinking, web search, code execution, the MCP connector, document citations, bulk processing with batches, uploading and referencing files by `file_id`, calling an API endpoint the package doesn't wrap yet, token counting before sending, or testing code that calls the API.
+description: Use when writing Laravel code that calls the Anthropic Claude API through `mozex/anthropic-laravel` or the underlying `mozex/anthropic-php` SDK, including the Claude-only work laravel/ai doesn't cover (Message Batches, token counting, the Files and Skills APIs, rate-limit headers, refusal fallback, Managed Agents, the Admin and usage reports) and named connections or per-tenant keys. Trigger on any mention of the `Anthropic` facade, `anthropic-laravel`, `Anthropic::messages()`, `Anthropic::batches()`, `Anthropic::models()`, `Anthropic::files()`, `Anthropic::request()`, `Anthropic::fake()`, `CreateResponse`, `FileResponse`, `ErrorException`, or any Claude/Anthropic API work in a Laravel project (controllers, queued jobs, Livewire components). Also trigger on requests to wire Claude into a Laravel app for chat, streaming responses, function calling (tool use), computer and browser toolsets, extended thinking, web search, code execution, the MCP connector, document citations, bulk processing with batches, uploading and referencing files by `file_id`, calling an API endpoint the package doesn't wrap yet, token counting before sending, or testing code that calls the API.
 ---
 
 # Anthropic Laravel
@@ -43,6 +43,7 @@ return [
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
     'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
     'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+    'middleware' => [], // client middleware class names, e.g. Anthropic\Middleware\OpenTelemetryMiddleware
     'fallback_models' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_FALLBACK_MODELS', ''))
@@ -53,6 +54,7 @@ return [
         'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
     ],
     'headers' => [],
+    'connections' => [], // 'support' => ['api_key' => env('ANTHROPIC_SUPPORT_API_KEY')], inheriting the rest
     'beta' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
@@ -68,7 +70,7 @@ return [
 
 `ANTHROPIC_BETA` takes a comma-separated list of beta names (`ANTHROPIC_BETA=compact-2026-01-12`). They go out in the `anthropic-beta` header on every request, merged with any `betas` array you pass on a single call.
 
-If neither `ANTHROPIC_API_KEY` nor `ANTHROPIC_AUTH_TOKEN` is set when the client resolves, the deferred service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The binding is a singleton, so `Anthropic::messages()`, `app('anthropic')`, and `app(\Anthropic\Contracts\ClientContract::class)` all resolve the same instance.
+If the config has neither `api_key` nor `auth_token` (and laravel/ai has no Anthropic key either) when the client resolves, the deferred service provider throws `Anthropic\Laravel\Exceptions\ApiKeyIsMissing`. The binding is a singleton, so `Anthropic::messages()`, `app('anthropic')`, and `app(\Anthropic\Contracts\ClientContract::class)` all resolve the same instance.
 
 Raise `ANTHROPIC_REQUEST_TIMEOUT` to 60+ seconds for extended thinking on high/max effort, code execution with slow scripts, or very large contexts. Streaming only applies the timeout to the initial connection; chunks flow freely after that.
 
@@ -664,6 +666,10 @@ Test queued jobs with `$job::dispatchSync()` plus `Anthropic::fake()`.
 Running out of fakes throws "No fake responses left." Use `$fake->addResponses([...])` to add mid-test.
 
 For the full list of fake response classes (`Messages\CountTokensResponse`, `Batches\BatchResultResponse`, `Models\ListResponse`, etc.), the in-memory SSE stream helper, and recursive-merge semantics for nested overrides, fetch `/mozex/anthropic-laravel` via Context7 or the docs site.
+
+## Connections and tenants
+
+The facade's root is `Anthropic\Laravel\AnthropicManager`; unknown calls go to the default connection (the top-level config). `Anthropic::connection('support')` resolves a named connection from `connections` (a shallow merge over the top level, cached; a connection that sets `api_key` or `auth_token` inherits neither, and one without a key throws; `Anthropic::forgetConnection()` after a runtime config change; workers and Octane forget them between jobs and requests). The default connection is the container's singleton and keeps the config it was built with: for a key that changes per job, use `withApiKey()` or a named connection. `Anthropic::withApiKey($tenantKey)` builds a client of the default settings with that key on every call, never cached: use it for per-tenant keys. `Anthropic::organization()`, `enterprise()`, `compliance()` use `admin_key`, `enterprise_key`, `compliance_key` (Bearer), which the app adds to `config/anthropic.php` (`'admin_key' => env('ANTHROPIC_ADMIN_KEY')`); they share the default's base URL and headers but not its `workspace_id`, and `connections` can't reuse their names. Type-hint `ClientContract` for the default client, `AnthropicManager` for connections. `Anthropic::fake()` answers every connection; `$fake->assertSentOn('support', Messages::class)` checks which one a call used (an injected `ClientContract` and `withApiKey()` count as `default`; `assertNotSentOn()` and a count form exist too). When this package's config has no key or token (unpublished, say) and laravel/ai has an Anthropic key, the default connection uses `config('ai.providers.anthropic.key')` and its `url`.
 
 ## Raw requests
 

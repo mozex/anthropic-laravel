@@ -80,6 +80,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Client Middleware
+    |--------------------------------------------------------------------------
+    |
+    | Middleware for the client itself (not Guzzle's), run around every HTTP
+    | attempt: class names the container resolves to an invokable taking the
+    | PSR-7 request and the next handler, such as the client's own
+    | Anthropic\Middleware\OpenTelemetryMiddleware.
+    */
+
+    'middleware' => [],
+
+    /*
+    |--------------------------------------------------------------------------
     | Refusal Fallback
     |--------------------------------------------------------------------------
     |
@@ -133,6 +146,25 @@ return [
     */
 
     'headers' => [],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Connections
+    |--------------------------------------------------------------------------
+    |
+    | The other keys in this file configure the default connection. Name
+    | more here, each taking what it doesn't set from those keys (a shallow
+    | merge: a connection's `beta` replaces the default's, and one that sets
+    | a key or token inherits neither), and reach them with
+    | Anthropic::connection('name'). The names default, organization,
+    | enterprise and compliance belong to the manager.
+    |
+    | 'connections' => [
+    |     'support' => ['api_key' => env('ANTHROPIC_SUPPORT_API_KEY')],
+    | ],
+    */
+
+    'connections' => [],
 
     /*
     |--------------------------------------------------------------------------

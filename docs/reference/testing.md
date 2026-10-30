@@ -89,6 +89,18 @@ Anthropic::fake([
 ]);
 ```
 
+The fake answers every connection too, `withApiKey()` and `organization()` included, and `assertSentOn()` checks which one a call used:
+
+```php
+use Anthropic\Resources\Messages;
+
+$fake = Anthropic::fake([CreateResponse::fake()]);
+
+Anthropic::connection('support')->messages()->create([...]);
+
+$fake->assertSentOn('support', Messages::class);
+```
+
 ## Assertions
 
 ### assertSent

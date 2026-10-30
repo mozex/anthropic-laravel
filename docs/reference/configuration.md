@@ -17,6 +17,7 @@ return [
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
     'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
     'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+    'middleware' => [],
     'fallback_models' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_FALLBACK_MODELS', ''))
@@ -27,6 +28,7 @@ return [
         'laravel_events' => (bool) env('ANTHROPIC_HTTP_LARAVEL_EVENTS', false),
     ],
     'headers' => [],
+    'connections' => [],
     'beta' => array_values(array_filter(array_map(
         'trim',
         explode(',', (string) env('ANTHROPIC_BETA', ''))
@@ -151,7 +153,54 @@ ANTHROPIC_HTTP_LARAVEL_EVENTS=true
 
 With `laravel_client` on, `Http::fake()` answers the requests, `Http::assertSent()` sees them and `Http::preventStrayRequests()` applies, whenever they're set; an app's own catch-all `Http::fake()` then catches them too. With `laravel_events` on, each attempt also dispatches Laravel's `RequestSending`, then `ResponseReceived` or `ConnectionFailed`, always as a pair, which Telescope and Sentry record as outgoing requests; the credential headers are taken out first. A streamed answer gets them too, as with Laravel's own client, so a listener that reads its body drains the stream.
 
-For OpenTelemetry spans with the GenAI attributes, the client's `OpenTelemetryMiddleware` goes on a client you build with the factory (see [Using a custom HTTP client](#using-a-custom-http-client) and the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration#opentelemetry)).
+For OpenTelemetry spans with the GenAI attributes, add the client's `OpenTelemetryMiddleware` to `middleware` (see [Client middleware](#client-middleware) and the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration#opentelemetry)).
+
+## Connections
+
+The top-level keys configure the default connection. Name more under `connections`, each taking what it doesn't set from the top level, and reach them with `Anthropic::connection()`:
+
+```php
+// config/anthropic.php
+'connections' => [
+    'support' => [
+        'api_key' => env('ANTHROPIC_SUPPORT_API_KEY'),
+        'fallback_models' => ['claude-opus-4-8'],
+    ],
+],
+```
+
+```php
+$reply = Anthropic::connection('support')->messages()->create([...]);
+```
+
+The merge is shallow: a connection's `beta` or `headers` replaces the top level's instead of adding to it. A connection that sets `api_key` or `auth_token` inherits neither, so it never sends two credentials, and one whose key is unset throws `ApiKeyIsMissing` naming it. `default`, `organization`, `enterprise` and `compliance` are the manager's own names, so `connections` can't use them.
+
+A connection's client is built once, like a database connection; after changing its config at runtime, call `Anthropic::forgetConnection('support')` and the next call builds it again. Queue workers and Octane forget them between jobs and requests on their own. The default connection is the container's `ClientContract`, which stays as it was built: for a key that changes from one job to the next, use `withApiKey()` or a named connection.
+
+For a key known only at runtime, such as a tenant's, `Anthropic::withApiKey($tenant->anthropic_key)` gives a client with the default connection's settings and that key. It's built on every call and never cached, so a key never outlives the job it was meant for.
+
+`Anthropic::organization()`, `enterprise()` and `compliance()` use their own keys, which you add to the config when you need them, such as `'admin_key' => env('ANTHROPIC_ADMIN_KEY')` (`enterprise_key` and `compliance_key` work the same way). Each throws a clear error when its key is missing. They go where the default connection goes, with its base URL, headers and transport settings, but without its `workspace_id`, since these keys belong to the organization.
+
+`Anthropic::fake()` answers every connection, `withApiKey()` included, and records which one each call used (a `withApiKey()` call counts as `default`):
+
+```php
+$fake = Anthropic::fake([CreateResponse::fake()]);
+
+// ...
+
+$fake->assertSentOn('support', Messages::class);
+```
+
+## Client middleware
+
+`middleware` takes middleware for the client itself, which runs around every attempt with the PSR-7 request and the next handler. Class names keep the config cacheable, and a connection can carry its own list:
+
+```php
+// config/anthropic.php
+'middleware' => [
+    \Anthropic\Middleware\OpenTelemetryMiddleware::class, // needs open-telemetry/api
+],
+```
 
 ## Per-request options
 
@@ -197,7 +246,7 @@ A few things to know before you set it:
 
 ## Upgrading an older config file
 
-A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `fallback_models`, `http`, `headers`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
+A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `middleware`, `fallback_models`, `http`, `headers`, `connections`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
 
 ## Beta features
 
@@ -268,16 +317,15 @@ For how beta headers work, multi-beta syntax, and version naming conventions, se
 
 ## The service container binding
 
-The service provider registers the client as a singleton in the container. That means the same client instance is reused across your entire request lifecycle:
+The facade's root is the connection manager, `Anthropic\Laravel\AnthropicManager`, and calls it doesn't know go to the default connection. The default client itself is a singleton in the container, so all of these are the same client:
 
 ```php
-// All three of these resolve the same client
 app(\Anthropic\Contracts\ClientContract::class);
 app('anthropic');
-\Anthropic\Laravel\Facades\Anthropic::messages();
+\Anthropic\Laravel\Facades\Anthropic::connection();
 ```
 
-The provider is deferred, so the client only gets instantiated the first time you actually use it.
+Type-hint `ClientContract` for the default client, or `AnthropicManager` for every connection. The provider is deferred, so the client is only built the first time you use it.
 
 ## Config caching
 
@@ -315,6 +363,6 @@ public function register(): void
 }
 ```
 
-The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys, and `withMiddleware(new \Anthropic\Laravel\Middleware\DispatchesEvents(fn () => app('events')))` to keep the events. For `laravel_client`, give your Guzzle client `'handler' => Http::buildHandlerStack()`, which fixes the fakes at the moment it's built. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))`, `withMiddleware(new \Anthropic\Middleware\RefusalFallbackMiddleware(config('anthropic.fallback_models', [])))`, your `middleware` entries through `withMiddleware()` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys, and `withMiddleware(new \Anthropic\Laravel\Middleware\DispatchesEvents(fn () => app('events')))` to keep the events. For `laravel_client`, give your Guzzle client `'handler' => Http::buildHandlerStack()`, which fixes the fakes at the moment it's built. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so the package still needs a key or token (its own, or laravel/ai's), or `ApiKeyIsMissing` is thrown before your closure runs. The replacement is the default connection only: named connections and `withApiKey()` still build the package's own client.
 
 Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).

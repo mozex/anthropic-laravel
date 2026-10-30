@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
+use Anthropic\Exceptions\InvalidArgumentException as ConfigValueIsInvalid;
+use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Middleware\RefusalFallbackMiddleware;
@@ -66,6 +68,7 @@ it('provides', function () {
         Client::class,
         ClientContract::class,
         'anthropic',
+        AnthropicManager::class,
     ]);
 });
 
@@ -231,7 +234,7 @@ it('sends the workspace id and the extra headers', function () {
             'workspace_id' => 'wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ',
             'beta' => ['files-api-2025-04-14'],
             // composed: no docs example of gateway headers
-            'headers' => ['X-Tenant' => 'acme', 'X-Org' => 42, 'X-Bad' => ['not', 'a', 'string'], 'anthropic-beta' => 'compact-2026-09-04'],
+            'headers' => ['X-Tenant' => 'acme', 'X-Org' => 42, 'X-Unset' => null, 'anthropic-beta' => 'compact-2026-09-04'],
         ],
     ]));
 
@@ -242,7 +245,7 @@ it('sends the workspace id and the extra headers', function () {
     expect($headers['anthropic-workspace-id'])->toBe('wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ')
         ->and($headers['X-Tenant'])->toBe('acme')
         ->and($headers['X-Org'])->toBe('42')
-        ->and($headers)->not->toHaveKey('X-Bad')
+        ->and($headers)->not->toHaveKey('X-Unset')
         // the headers key is applied last, so it wins over the beta key
         ->and($headers['anthropic-beta'])->toBe('compact-2026-09-04');
 });
@@ -312,8 +315,23 @@ it('retries as many times as the config says', function (mixed $maxRetries, int 
     'an int' => [2, 2],
     'the default' => [0, 0],
     'empty' => [null, 0],
-    'not a number' => ['many', 0],
-    'not positive' => ['-1', 0],
+    'blank from .env' => ['', 0],
+]);
+
+it('throws on a config value of the wrong type, naming the key', function (array $config, string $message) {
+    $app = app();
+
+    $app->bind('config', fn () => new Repository([
+        'anthropic' => ['api_key' => 'test', ...$config],
+    ]));
+
+    (new ServiceProvider($app))->register();
+
+    expect(fn () => $app->get(Client::class))->toThrow(ConfigValueIsInvalid::class, $message);
+})->with([
+    "a retry count that isn't a number" => [['max_retries' => 'many'], '[max_retries]'],
+    'a negative retry count' => [['max_retries' => '-1'], '[max_retries]'],
+    "a header that isn't a string" => [['headers' => ['X-Bad' => ['not', 'a', 'string']]], '[headers]'],
 ]);
 
 it('builds the fallback chain from the config, with no state shared between requests', function () {

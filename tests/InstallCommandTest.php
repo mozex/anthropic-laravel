@@ -96,7 +96,7 @@ it('names the keys a config published by an older release lacks', function () {
 
     $this->artisan('anthropic:install')
         ->expectsConfirmation(STAR_QUESTION, 'no')
-        ->expectsOutputToContain('File already exists, without auth_token, workspace_id, connect_timeout, max_retries, fallback_models, http, headers, api_version, base_url.')
+        ->expectsOutputToContain('File already exists, without auth_token, workspace_id, connect_timeout, max_retries, middleware, fallback_models, http, headers, connections, api_version, base_url.')
         ->expectsOutputToContain('Copy them into config/anthropic.php from vendor/mozex/anthropic-laravel/config/anthropic.php.')
         ->assertSuccessful();
 });

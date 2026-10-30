@@ -35,6 +35,7 @@ Laravel wrapper for [Anthropic PHP](https://github.com/mozex/anthropic-php), the
   - [Error Handling](https://mozex.dev/docs/anthropic-laravel/v1/reference/error-handling)
   - [Meta Information](https://mozex.dev/docs/anthropic-laravel/v1/reference/meta-information)
   - [Testing](https://mozex.dev/docs/anthropic-laravel/v1/reference/testing)
+  - [Using alongside laravel/ai](https://mozex.dev/docs/anthropic-laravel/v1/reference/laravel-ai)
 
 ## Support This Project
 

@@ -10,6 +10,16 @@ This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw
 
 A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired']])`, used to go out in a form the API accepts and ignores, so the filter did nothing. It's now sent as `lifecycle[]=retired`, and the results follow it.
 
+### A Connection Manager Behind The Facade
+
+**Likelihood Of Impact: Low**
+
+`Anthropic::getFacadeRoot()` now returns `Anthropic\Laravel\AnthropicManager`, which forwards the calls it doesn't know to the default client, so `Anthropic::messages()` and the rest work as before. Code that read the root expecting the client should type-hint `Anthropic\Contracts\ClientContract` instead; `app('anthropic')` and `ClientContract` still give the client.
+
+A new eager provider, `Anthropic\Laravel\AnthropicServiceProvider`, is auto-discovered. An app that lists its providers by hand (with `dont-discover`) adds it beside `Anthropic\Laravel\ServiceProvider`.
+
+The config gains `connections` and `middleware`; `php artisan anthropic:install` names them when an older published file lacks them. An app with only laravel/ai's Anthropic key configured now gets a working client from it.
+
 ### Events For Every Request
 
 **Likelihood Of Impact: Low**

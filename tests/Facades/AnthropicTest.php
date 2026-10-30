@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Exceptions\ErrorException;
+use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
@@ -20,6 +21,7 @@ use Anthropic\Responses\Files\FileResponse;
 use Anthropic\Responses\Messages\CreateResponse as MessagesCreateResponse;
 use Anthropic\Responses\Models\ListResponse as ModelsListResponse;
 use Anthropic\Responses\Raw\RawResponse;
+use Anthropic\Testing\Resources\MessagesTestResource;
 use GuzzleHttp\Psr7\Utils;
 use Illuminate\Config\Repository;
 use Illuminate\Container\Container;
@@ -50,6 +52,21 @@ it('resolves resources', function () {
         ->and(Anthropic::models())->toBeInstanceOf(Models::class)
         ->and(Anthropic::batches())->toBeInstanceOf(Batches::class)
         ->and(Anthropic::files())->toBeInstanceOf(Files::class);
+});
+
+test('a second fake in a container without the provider replaces the first', function () {
+    $previous = Container::getInstance();
+    $app = new Container;
+    Anthropic::setFacadeApplication($app);
+    Facade::clearResolvedInstances();
+
+    Anthropic::fake([CreateResponse::fake(['completion' => 'first'])]);
+    Anthropic::fake([CreateResponse::fake(['completion' => 'second'])]);
+
+    expect(Anthropic::completions()->create(['model' => 'claude-2.1', 'prompt' => 'PHP is '])['completion'])->toBe('second');
+
+    Facade::clearResolvedInstances();
+    Anthropic::setFacadeApplication($previous);
 });
 
 test('fake returns the given response', function () {
@@ -386,7 +403,9 @@ test('fake reaches code that type-hints the client contract, before and after th
         $app->loadDeferredProviders();
 
         expect($app->make(ClaudeGreeter::class)->client)->toBe($fake)
-            ->and(Anthropic::getFacadeRoot())->toBe($fake);
+            // the facade's root is the manager, whose connections answer from the fake
+            ->and(Anthropic::getFacadeRoot())->toBeInstanceOf(AnthropicManager::class)
+            ->and(Anthropic::messages())->toBeInstanceOf(MessagesTestResource::class);
     } finally {
         Container::setInstance($container);
         Facade::clearResolvedInstances();

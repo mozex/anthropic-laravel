@@ -7,6 +7,7 @@ namespace Anthropic\Laravel\Facades;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Contracts\ResponseContract;
 use Anthropic\Contracts\ResponseStreamContract;
+use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Testing\AnthropicFake;
 use Anthropic\Responses\Completions\StreamResponse as CompletionsStreamResponse;
 use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
@@ -24,6 +25,15 @@ use Throwable;
  * @method static \Anthropic\Resources\Files files()
  * @method static \Anthropic\Contracts\ClientContract withOptions(array<string, mixed> $options)
  * @method static \Anthropic\Responses\Raw\RawResponse request(string $method, string $path, array<string, mixed> $parameters = [])
+ * @method static \Anthropic\Contracts\ClientContract connection(?string $name = null)
+ * @method static \Anthropic\Contracts\ClientContract withApiKey(string $apiKey)
+ * @method static \Anthropic\Contracts\ClientContract organization()
+ * @method static \Anthropic\Contracts\ClientContract enterprise()
+ * @method static \Anthropic\Contracts\ClientContract compliance()
+ * @method static \Anthropic\Laravel\AnthropicManager extend(string $name, \Closure $callback)
+ * @method static \Anthropic\Laravel\AnthropicManager forgetConnection(?string $name = null)
+ *
+ * @see AnthropicManager
  */
 class Anthropic extends Facade
 {
@@ -32,11 +42,12 @@ class Anthropic extends Facade
      */
     protected static function getFacadeAccessor(): string
     {
-        return 'anthropic';
+        return AnthropicManager::class;
     }
 
     /**
-     * Swaps the client for a fake, for the facade and for anything the container resolves as a ClientContract.
+     * Swaps the client for a fake: every connection of the manager answers from it, and so does anything the container
+     * resolves as a ClientContract. The facade's root stays the manager, so macros and a type-hinted manager reach it.
      *
      * @param  array<array-key, ResponseContract<array<array-key, mixed>>|ResponseStreamContract<mixed>|CompletionsStreamResponse|MessagesStreamResponse|RawResponse|Throwable|Stringable|string>  $responses
      */
@@ -50,7 +61,17 @@ class Anthropic extends Facade
         }
 
         static::$app?->instance(ClientContract::class, $fake);
-        self::swap($fake);
+
+        // swap() binds the root's name to the fake, so a second fake() in a container without the provider finds a fake.
+        $manager = static::$app?->bound(AnthropicManager::class) === true ? static::$app->make(AnthropicManager::class) : null;
+
+        if ($manager instanceof AnthropicManager) {
+            $manager->useFake($fake);
+            static::clearResolvedInstance(AnthropicManager::class);
+        } else {
+            // A container without the provider, as some tests build: the fake stands in for the root itself.
+            self::swap($fake);
+        }
 
         return $fake;
     }

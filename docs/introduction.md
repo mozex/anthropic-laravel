@@ -131,3 +131,4 @@ See [Testing](./reference/testing.md) for the full set of fake patterns and asse
 - [Error Handling](./reference/error-handling.md): Exception types and catching them in Laravel
 - [Meta Information](./reference/meta-information.md): Rate limits, request IDs, token limits
 - [Testing](./reference/testing.md): `Anthropic::fake()`, mock responses, and assertions
+- [Using alongside laravel/ai](./reference/laravel-ai.md): One key for both, and what to reach for where
