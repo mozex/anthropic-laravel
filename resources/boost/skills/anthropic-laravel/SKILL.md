@@ -259,6 +259,8 @@ Pass an opaque identifier (UUID, hash) via `metadata.user_id`. It surfaces in th
 
 ### Long requests belong in queues
 
+Put `new \Anthropic\Laravel\Queue\ThrottlesAnthropic('claude-sonnet-5-5')` in a Claude job's `middleware()`: it fails the job on the monthly spend cap (a 429 with `enforced_spend_limit_reached`, dispatching `SpendCapReached`) and on 400/401/402/403/404/413/422, and releases it on other 429s, 529, 408, 409, 5xx and connection errors for `retry-after` (else the rate-limit reset, else a doubling backoff), holding back every job of the same key meanwhile. One key per rate-limit class; `->budget(20000)` waits for the reset while the last answer left fewer tokens; `->concurrency(5)` caps parallel calls (`Cache::funnel`). Turn the client's retries off in the job (`Anthropic::withOptions(['max_retries' => 0])`), bound it by `retryUntil()` (each release is an attempt) and set `$maxExceptions` (with `retryUntil()`, `--tries` no longer stops a job that throws). On the sync queue or run directly, the error goes to the caller.
+
 Anything with extended thinking, code execution, or large context pushes past typical HTTP timeouts. Dispatch to a queue and raise both `ANTHROPIC_REQUEST_TIMEOUT` and the job's `$timeout`, then make sure the queue connection's `retry_after` in `config/queue.php` is larger than the job's `$timeout`. With a smaller `retry_after`, the worker releases the job to another process while the first is still waiting on Claude: the job runs twice and the call is paid twice. With `ANTHROPIC_MAX_RETRIES` on, count every attempt: up to `max_retries + 1` request timeouts plus the waits between them. Each fallback model gets a whole timeout too. `php artisan anthropic:doctor` checks the default queue connection's `retry_after` against `request_timeout × (max_retries + 1) × (1 + fallback models)` plus the backoff, exits non-zero when it's too short, and warns about a Horizon supervisor `timeout` below it (a job's `$timeout` wins over it). A streamed call's `request_timeout` is only the longest gap between chunks, so size a streaming job's `$timeout` and `retry_after` for the whole answer.
 
 ### Compaction
@@ -411,9 +413,11 @@ For per-type field lists, fetch `/mozex/anthropic-php` via Context7 or the docs 
 Same shape as `create()`. Returns a single `inputTokens` field (camelCase). Include `tools` and `system` if they'll be in the real request, since both contribute to the count. Common use: trim conversation history before hitting context limits.
 
 ```php
-$count = Anthropic::messages()->countTokens(['model' => $model, 'messages' => $messages]);
-if ($count->inputTokens > 180000) { $messages = array_slice($messages, 4); }
+$parameters = Anthropic::messages()->trimToFit($parameters, 150000); // drops the oldest turns until it fits
+Anthropic::messages()->fits($parameters, 150000);                    // true or false
 ```
+
+Both take `create()`'s parameters as they are (only what `count_tokens` takes is sent) and count input tokens only. `trimToFit()` cuts only before a user turn without a `tool_result`, keeps the system prompt and tools, and throws `Anthropic\Exceptions\InvalidArgumentException` (not SPL's) when even the last turn is over. A thinking conversation needs `thinking.block_binding.prefix_mismatch_behavior: 'drop_block'` (beta `thinking-binding-controls-2026-08-01`) or Claude 5.1 rejects the kept thinking. Validation: `['bail', ..., new \Anthropic\Laravel\Rules\FitsInTokens(4000, 'claude-sonnet-5-5')]` (`->withSystem()`, `->onConnection()`; too large to count fails, another API error throws). CLI: `php artisan anthropic:count-tokens "text" --model=... [--file=] [--system=]`.
 
 ## Models
 
@@ -438,8 +442,10 @@ Lifecycle: `$model->lifecycle` (`'active'`, `'deprecated'`, `'retired'`), `$mode
 Cache the list so you're not hitting the API per request:
 
 ```php
-$models = Cache::remember('anthropic.models', now()->addHour(), fn () => Anthropic::models()->list()->data);
+$models = Anthropic::models()->cached(); // every model, Cache::flexible for 1h fresh, up to a day stale; per connection and key; never under the fake
 ```
+
+`php artisan anthropic:models` lists them; `php artisan anthropic:ping` checks the key with that call (no tokens); `php artisan anthropic:chat --model=...` chats in the terminal, streamed.
 
 The full capability tree (batch, citations, codeExecution, imageInput, pdfInput, structuredOutputs, thinking types, effort levels, and the versioned contextManagement strategies map) is extensive. Fetch `/mozex/anthropic-php` via Context7 or the docs site for the exact shape.
 

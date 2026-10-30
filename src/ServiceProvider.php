@@ -7,8 +7,12 @@ namespace Anthropic\Laravel;
 use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\BatchesCommand;
+use Anthropic\Laravel\Commands\ChatCommand;
+use Anthropic\Laravel\Commands\CountTokensCommand;
 use Anthropic\Laravel\Commands\DoctorCommand;
 use Anthropic\Laravel\Commands\InstallCommand;
+use Anthropic\Laravel\Commands\ModelsCommand;
+use Anthropic\Laravel\Commands\PingCommand;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\DeferrableProvider;
@@ -55,6 +59,10 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 InstallCommand::class,
                 DoctorCommand::class,
                 BatchesCommand::class,
+                PingCommand::class,
+                CountTokensCommand::class,
+                ChatCommand::class,
+                ModelsCommand::class,
             ]);
         }
     }

@@ -31,6 +31,15 @@ The longest non-streamed call is `request_timeout` × (`max_retries` + 1) × (1 
 
 Any failed check exits with a non-zero code, so a deploy pipeline can run it. Warnings don't fail it. `--offline` skips the API and the fallback models, and without a key it only warns about the credential, so a pipeline without one can still check the queues.
 
+## anthropic:ping and anthropic:chat
+
+```bash
+php artisan anthropic:ping --connection=support
+php artisan anthropic:chat --model=claude-sonnet-5-5 --system="Be brief."
+```
+
+`anthropic:ping` makes the doctor's one call that spends no tokens (the first page of the models list) and prints how long the API took and its request ID; it exits non-zero when the key is refused. `anthropic:chat` is a conversation in the terminal, each answer streamed as it comes (with Laravel Prompts 0.3.15 or later; printed whole otherwise, on Windows and to a pipe), until an empty line. `--max-tokens` caps each answer (1024 by default). `anthropic:models`, `anthropic:batches` and `anthropic:count-tokens` are on the [Models](../usage/models.md), [Batches](../usage/batches.md) and [Token Counting](../usage/token-counting.md) pages.
+
 ## php artisan about
 
 `php artisan about` has an Anthropic section: the package and client versions, the kind of credential in use (an API key, an auth token or laravel/ai's key, never its value), the request timeout, the connections, and the base URL, API version, betas and retries the default client sends.

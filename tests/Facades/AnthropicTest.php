@@ -8,6 +8,7 @@ use Anthropic\Exceptions\ErrorException;
 use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Facades\Anthropic;
+use Anthropic\Laravel\Resources\Models as LaravelModels;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Resources\Batches;
 use Anthropic\Resources\Completions;
@@ -50,7 +51,7 @@ it('resolves resources', function () {
 
     expect(Anthropic::completions())->toBeInstanceOf(Completions::class)
         ->and(Anthropic::messages())->toBeInstanceOf(Messages::class)
-        ->and(Anthropic::models())->toBeInstanceOf(Models::class)
+        ->and(Anthropic::models())->toBeInstanceOf(LaravelModels::class)
         ->and(Anthropic::batches())->toBeInstanceOf(Batches::class)
         ->and(Anthropic::files())->toBeInstanceOf(Files::class);
 });

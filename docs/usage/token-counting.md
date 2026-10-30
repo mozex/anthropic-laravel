@@ -22,38 +22,42 @@ $response->inputTokens; // 2095
 
 Same parameters as `create()`, but it doesn't generate a response. You can include `tools`, `system`, and anything else that contributes to the token count.
 
-## Trimming conversation history
+## Fitting a conversation in the limit
 
-A common Laravel pattern is to count tokens before sending and trim older messages if you're close to the context limit:
+`fits()` tells you whether a request is within a number of input tokens, and `trimToFit()` drops the oldest turns until it is. Pass them the parameters you'll give `create()`; they count only what `count_tokens` takes:
 
 ```php
-$messages = $conversation->messages()
-    ->latest('id')
-    ->take(50)
-    ->get()
-    ->reverse()
-    ->map(fn ($message) => [
-        'role' => $message->is_assistant ? 'assistant' : 'user',
-        'content' => $message->content,
-    ])
-    ->toArray();
-
-$count = Anthropic::messages()->countTokens([
-    'model' => 'claude-sonnet-5-5',
-    'messages' => $messages,
-]);
-
-if ($count->inputTokens > 180000) {
-    // Drop the oldest pairs until we're under the limit
-    $messages = array_slice($messages, 4);
-}
-
-$response = Anthropic::messages()->create([
+$parameters = [
     'model' => 'claude-sonnet-5-5',
     'max_tokens' => 1024,
-    'messages' => $messages,
+    'system' => 'You are a support assistant.',
+    'messages' => $conversation->messages->map->toClaude()->all(),
+];
+
+$response = Anthropic::messages()->create(
+    Anthropic::messages()->trimToFit($parameters, 150000),
+);
+```
+
+`trimToFit()` only cuts before a user turn that answers no tool call, so tool calls keep their results, and it keeps the system prompt and the tools (a `role: system` message among the dropped turns goes with them). When even the last turn is over the limit, it throws `Anthropic\Exceptions\InvalidArgumentException`. The limit counts input only; a model's own is `maxInputTokens` on `Anthropic::models()->retrieve($model)`.
+
+A conversation with thinking blocks also needs `'thinking' => [..., 'block_binding' => ['prefix_mismatch_behavior' => 'drop_block']]` and the `thinking-binding-controls-2026-08-01` beta, or Claude 5.1 models reject the kept turns' thinking with a 400. Server tools, the MCP connector and `url` or `file` sources can't be counted, so the count throws for those. The [PHP docs](https://mozex.dev/docs/anthropic-php/v1/usage/token-counting#trimming-a-conversation-to-fit) have the details.
+
+## Validating a prompt's length
+
+`FitsInTokens` fails a text that would count more than the limit as one user message:
+
+```php
+use Anthropic\Laravel\Rules\FitsInTokens;
+
+$request->validate([
+    'prompt' => ['bail', 'required', 'string', 'max:20000', new FitsInTokens(4000, 'claude-sonnet-5-5')],
 ]);
 ```
+
+`->withSystem($prompt)` counts it with your system prompt, and `->onConnection('support')` counts through another connection. Each check is a `count_tokens` call, free but rate limited, so put the rule last, behind `bail`, which skips it once an earlier rule failed. A text too large for the API to count fails the rule; any other failed count throws the API's exception, since it isn't the input's fault.
+
+From the terminal, `php artisan anthropic:count-tokens "Hello" --model=claude-sonnet-5-5` counts a text, `--file=prompt.md` a file, and `--system=` adds a system prompt.
 
 ## Cost estimation before sending
 

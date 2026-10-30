@@ -10,6 +10,7 @@ use Anthropic\Laravel\Connection;
 use Anthropic\Laravel\Events\RequestSending;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Anthropic\Laravel\Facades\Anthropic;
+use Anthropic\Laravel\Resources\Models as LaravelModels;
 use Anthropic\Laravel\ServiceProvider;
 use Anthropic\Laravel\Testing\AnthropicFake;
 use Anthropic\Resources\Messages;
@@ -72,7 +73,7 @@ test('the facade\'s root is the manager, and its default connection is the bound
         ->and(Anthropic::connection()->client())->toBe(app(ClientContract::class))
         ->and(app('anthropic'))->toBe(app(ClientContract::class))
         ->and(app(Client::class))->toBe(app(ClientContract::class))
-        ->and(Anthropic::models())->toBeInstanceOf(Models::class);
+        ->and(Anthropic::models())->toBeInstanceOf(LaravelModels::class);
 });
 
 test('a named connection takes what it doesn\'t set from the top level', function () {

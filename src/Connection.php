@@ -10,8 +10,8 @@ use Anthropic\Contracts\Resources\BatchesContract;
 use Anthropic\Contracts\Resources\CompletionsContract;
 use Anthropic\Contracts\Resources\FilesContract;
 use Anthropic\Contracts\Resources\MessagesContract;
-use Anthropic\Contracts\Resources\ModelsContract;
 use Anthropic\Laravel\Batches\PendingBatch;
+use Anthropic\Laravel\Resources\Models;
 use Anthropic\Responses\Raw\RawResponse;
 use SensitiveParameter;
 
@@ -77,9 +77,20 @@ class Connection implements ClientContract
         return $this->client->messages();
     }
 
-    public function models(): ModelsContract
+    /**
+     * The Models resource with `cached()`, whose cache is this connection's (and a `withApiKey()` key's) own.
+     */
+    public function models(): Models
     {
-        return $this->client->models();
+        $cacheKey = "anthropic:models:{$this->name}";
+
+        if ($this->apiKey !== null) {
+            // An HMAC under the app key, so a cache key Telescope records says nothing about the API key.
+            $appKey = config('app.key');
+            $cacheKey .= ':'.hash_hmac('sha256', $this->apiKey, is_string($appKey) ? $appKey : '');
+        }
+
+        return new Models($this->client->models(), $cacheKey);
     }
 
     public function batches(): BatchesContract

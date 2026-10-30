@@ -65,11 +65,10 @@ try {
 
 ## Retrying failed jobs
 
-With `ANTHROPIC_MAX_RETRIES` set (see [Configuration](./configuration.md#retries)), the client retries connection failures, 429s and overloads itself before your code sees an exception. For longer waits, queue jobs are a natural fit for retry logic. Combine Laravel's `tries` and `backoff` with rate limit handling. The job below does its own waiting, so it turns the client's retries off for its call:
+`ThrottlesAnthropic` is job middleware that knows Claude's errors. It fails a job the API won't take on a retry and releases one it may take later, waiting what the API asks:
 
 ```php
-use Anthropic\Exceptions\OverloadedException;
-use Anthropic\Exceptions\RateLimitException;
+use Anthropic\Laravel\Queue\ThrottlesAnthropic;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -77,34 +76,58 @@ class AskClaudeJob implements ShouldQueue
 {
     use Queueable;
 
-    public $tries = 5;
-    public $backoff = [10, 30, 60, 120, 300];
+    // a bug of the job's own stops it after 3 runs, each of which may have paid for a call
+    public $maxExceptions = 3;
+
+    public function middleware(): array
+    {
+        return [new ThrottlesAnthropic('claude-sonnet-5-5')];
+    }
+
+    // each release counts as an attempt, so bound the job by time
+    public function retryUntil(): DateTime
+    {
+        return now()->addHours(6);
+    }
 
     public function handle(): void
     {
-        try {
-            $response = Anthropic::withOptions(['max_retries' => 0])->messages()->create([...]);
-        } catch (RateLimitException $e) {
-            if (($e->getErrorDetails()['error_code'] ?? null) === 'enforced_spend_limit_reached') {
-                $this->fail($e); // Monthly spend cap: retrying won't help
-                return;
-            }
-
-            $this->release($e->getRetryAfter() ?? 60);
-            return;
-        } catch (OverloadedException $e) {
-            $this->release(30);
-            return;
-        }
-
-        // Process response...
+        $response = Anthropic::withOptions(['max_retries' => 0])->messages()->create([...]);
     }
 }
 ```
 
-`getRetryAfter()` returns the `Retry-After` header in seconds, or `null` when the 429 has none. An organization past its tier's monthly spend cap gets none, since waiting won't help until access resumes. `getErrorDetails()` identifies that case, so the job fails instead of burning through its tries.
+| The API answers | The job |
+|-----------------|---------|
+| 429 at the monthly spend cap (`enforced_spend_limit_reached`) | fails, and `SpendCapReached` is dispatched |
+| Any other 429, a 529 overload, a 408, 409 or 5xx, or no answer | is released for `retry-after`, else until the rate limit resets, else a backoff from 10 seconds that doubles up to 10 minutes |
+| 400, 401, 402, 403, 404, 413 or 422 | fails: a retry gets the same answer |
 
-Overload errors (HTTP 529) are expected during peak times. Release the job back to the queue and retry rather than reporting them as exceptions to your error tracker. Catch `OverloadedException`, or check `getErrorType()`, never the status code: an overload in the middle of a stream comes with status 200 and still throws `OverloadedException`.
+A rate limit or an overload holds back every job with the same key until the wait is over, rather than letting each one hit the limit on its own. Rate limits are per model class, so pass one key for models that share a class (the default key is shared by every job). Anything else a job throws goes on as usual, which `$maxExceptions` stops. The job needs `InteractsWithQueue`, which `Queueable` includes, and it turns the client's own retries off for its call, so the two don't wait on top of each other. Put `ThrottlesAnthropic` last in `middleware()`, so it sees the API's errors before a middleware like `ThrottlesExceptions` turns them into plain retries. On the `sync` queue, or a job run directly, there's nothing to release or fail later, so the error goes to the caller.
+
+Two options act before a job calls:
+
+```php
+(new ThrottlesAnthropic('claude-sonnet-5-5'))
+    ->budget(20000)     // wait for the reset while the last answer left fewer tokens than this
+    ->concurrency(5);   // at most 5 of these jobs call at once (Cache::funnel, a store with locks)
+```
+
+`budget()` reads the rate-limit headers of the last answer a throttled job got under that key. The API rounds them to the nearest thousand, so treat the number as a guide.
+
+`SpendCapReached` carries the key, the job's class, the request ID and the API's message, which makes it a good place to tell someone:
+
+```php
+use Anthropic\Laravel\Events\SpendCapReached;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
+
+Event::listen(function (SpendCapReached $event) {
+    Notification::route('slack', config('services.slack.ops'))->notify(new ClaudeSpendCapReached($event));
+});
+```
+
+Overload errors (HTTP 529) are expected during peak times, which is why the middleware releases them. Outside a queued job, catch `OverloadedException`, or check `getErrorType()`, never the status code: an overload in the middle of a stream comes with status 200 and still throws `OverloadedException`.
 
 On Laravel 13.30 or later you can set both rules once, in `bootstrap/app.php`: stop retrying a job on errors another try won't fix, and throttle how often overloads reach your error tracker (`throttle()` works on Laravel 12 too):
 

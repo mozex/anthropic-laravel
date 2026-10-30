@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Anthropic\Laravel;
 
+use Anthropic\Laravel\Queue\ThrottleScope;
 use Anthropic\Laravel\Support\About;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Foundation\Console\AboutCommand;
@@ -12,13 +13,21 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 /**
  * The eager provider: what must exist before the client is ever resolved, the listeners that forget the manager's
- * connections and the `about` section. The client, the manager, the config and the commands stay in the deferred
- * `ServiceProvider`.
+ * connections, the `about` section and `ThrottlesAnthropic`'s scope. The client, the manager, the config and the
+ * commands stay in the deferred `ServiceProvider`.
  *
  * @internal
  */
 class AnthropicServiceProvider extends BaseServiceProvider
 {
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        $this->app->singleton(ThrottleScope::class);
+    }
+
     /**
      * Bootstrap any application services.
      */

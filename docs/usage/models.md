@@ -61,14 +61,10 @@ The list holds active and deprecated models. Pass `lifecycle` to pick the stages
 
 ## Building a model selector
 
-Cache the model list so you're not hitting the API on every request:
+`cached()` keeps every model in the cache, so you're not hitting the API on every request:
 
 ```php
-use Illuminate\Support\Facades\Cache;
-
-$models = Cache::remember('anthropic.models', now()->addHour(), function () {
-    return Anthropic::models()->list()->data;
-});
+$models = Anthropic::models()->cached();
 
 // In a Blade form
 <select name="model">
@@ -77,6 +73,8 @@ $models = Cache::remember('anthropic.models', now()->addHour(), function () {
     @endforeach
 </select>
 ```
+
+It's built on `Cache::flexible()`: fresh for an hour, then served for up to a day while it's fetched again after the response (`cached([600, 3600])` sets both). The cache is per connection, and per key for `Anthropic::withApiKey()`, since keys can see different models. Under `Anthropic::fake()` it's never cached. `php artisan anthropic:models` prints the same list with each model's input limit and lifecycle.
 
 ## Retrieving a single model
 

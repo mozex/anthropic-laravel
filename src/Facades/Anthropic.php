@@ -24,7 +24,7 @@ use Throwable;
 /**
  * @method static \Anthropic\Resources\Completions completions()
  * @method static \Anthropic\Resources\Messages messages()
- * @method static \Anthropic\Resources\Models models()
+ * @method static \Anthropic\Laravel\Resources\Models models()
  * @method static \Anthropic\Resources\Batches batches()
  * @method static \Anthropic\Resources\Files files()
  * @method static \Anthropic\Laravel\Connection withOptions(array<string, mixed> $options)
