@@ -42,6 +42,10 @@ return [
     'workspace_id' => env('ANTHROPIC_WORKSPACE_ID'),
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
     'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
+    'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+    'http' => [
+        'middleware' => [],
+    ],
     'headers' => [],
     'beta' => array_values(array_filter(array_map(
         'trim',
@@ -52,9 +56,9 @@ return [
 ];
 ```
 
-`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. `auth_token` sends `Authorization: Bearer` (a Workload Identity Federation access token) when no key is set, one credential as in the official SDKs (a shell-exported `ANTHROPIC_AUTH_TOKEN`, which Claude Code reads too, reaches an app without a key); `workspace_id` sends `anthropic-workspace-id`, needed by keys not scoped to one workspace; `connect_timeout` is the Guzzle connect timeout, which streamed requests ignore; `headers` (no env variable) go on every request, applied last. A config file published by an older release lacks the newer keys; re-running `anthropic:install` names what's missing.
+`api_version` sets the `anthropic-version` header (default `2023-06-01`; `2026-10-21` rejects `temperature`, `top_p` and `top_k` on every model). Prism reads `ANTHROPIC_API_VERSION` too, so setting it switches both. `base_url` takes a proxy or gateway URL the way the official SDKs do, without `/v1`, which the package adds unless the URL ends in it. A shell-exported `ANTHROPIC_BASE_URL` (Claude Code and the SDKs read it too) wins over `.env` for artisan and queue workers, and that host gets the API key. `auth_token` sends `Authorization: Bearer` (a Workload Identity Federation access token) when no key is set, one credential as in the official SDKs (a shell-exported `ANTHROPIC_AUTH_TOKEN`, which Claude Code reads too, reaches an app without a key); `workspace_id` sends `anthropic-workspace-id`, needed by keys not scoped to one workspace; `connect_timeout` is the Guzzle connect timeout, which streamed requests ignore; `max_retries` (default 0; the official SDKs use 2) retries connection failures, timeouts, 408/409/429 and 5xx, waiting what the API asks (one call can then take `max_retries + 1` request timeouts plus those waits, so size a job's `$timeout` and the queue's `retry_after` for it; a job that releases itself on a 429 turns them off with `withOptions(['max_retries' => 0])`); `http.middleware` takes Guzzle middleware class names, resolved from the container, and reaches only the package's own Guzzle client; `headers` (no env variable) go on every request, applied last. A config file published by an older release lacks the newer keys; re-running `anthropic:install` names what's missing.
 
-`Anthropic::withOptions(['workspace_id' => ..., 'betas' => [...], 'headers' => [...], 'query' => [...], 'api_version' => ..., 'user_profile_id' => ...])` returns a client for one tenant or feature, leaving the app-wide one unchanged; it's also how ID-only methods (`models()->retrieve()`) get betas. Under `Anthropic::fake()` it shares the fake's queue; assert with `Anthropic::assertSentWithOptions(Messages::class, ['workspace_id' => ...])`.
+`Anthropic::withOptions(['workspace_id' => ..., 'betas' => [...], 'headers' => [...], 'query' => [...], 'api_version' => ..., 'user_profile_id' => ..., 'max_retries' => ...])` returns a client for one tenant or feature, leaving the app-wide one unchanged; it's also how ID-only methods (`models()->retrieve()`) get betas. Under `Anthropic::fake()` it shares the fake's queue; assert with `Anthropic::assertSentWithOptions(Messages::class, ['workspace_id' => ...])`.
 
 `ANTHROPIC_BETA` takes a comma-separated list of beta names (`ANTHROPIC_BETA=compact-2026-01-12`). They go out in the `anthropic-beta` header on every request, merged with any `betas` array you pass on a single call.
 
@@ -244,7 +248,7 @@ Pass an opaque identifier (UUID, hash) via `metadata.user_id`. It surfaces in th
 
 ### Long requests belong in queues
 
-Anything with extended thinking, code execution, or large context pushes past typical HTTP timeouts. Dispatch to a queue and raise both `ANTHROPIC_REQUEST_TIMEOUT` and the job's `$timeout`, then make sure the queue connection's `retry_after` in `config/queue.php` is larger than the job's `$timeout`. With a smaller `retry_after`, the worker releases the job to another process while the first is still waiting on Claude: the job runs twice and the call is paid twice.
+Anything with extended thinking, code execution, or large context pushes past typical HTTP timeouts. Dispatch to a queue and raise both `ANTHROPIC_REQUEST_TIMEOUT` and the job's `$timeout`, then make sure the queue connection's `retry_after` in `config/queue.php` is larger than the job's `$timeout`. With a smaller `retry_after`, the worker releases the job to another process while the first is still waiting on Claude: the job runs twice and the call is paid twice. With `ANTHROPIC_MAX_RETRIES` on, count every attempt: up to `max_retries + 1` request timeouts plus the waits between them.
 
 ### Compaction
 
@@ -562,7 +566,8 @@ class AskClaudeJob implements ShouldQueue {
 
     public function handle(): void {
         try {
-            Anthropic::messages()->create([...]);
+            // the job does its own waiting, so the client doesn't retry
+            Anthropic::withOptions(['max_retries' => 0])->messages()->create([...]);
         } catch (RateLimitException $e) {
             if (($e->getErrorDetails()['error_code'] ?? null) === 'enforced_spend_limit_reached') {
                 $this->fail($e); // the monthly spend cap carries no Retry-After
@@ -654,7 +659,7 @@ For the full list of fake response classes (`Messages\CountTokensResponse`, `Bat
 
 ## Direct SDK factory (rare)
 
-Only when you need a custom HTTP client, headers, or stream handler (the API version and base URL have config keys):
+Only when you need a custom HTTP client, headers, or stream handler (the API version, base URL, retries and Guzzle middleware have config keys):
 
 ```php
 $client = \Anthropic::factory() // the PHP client's class, not the facade

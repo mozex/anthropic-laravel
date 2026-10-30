@@ -31,10 +31,13 @@ arch('service providers')
     ->expect('Anthropic\Laravel\ServiceProvider')
     ->toOnlyUse([
         'GuzzleHttp\Client',
+        'GuzzleHttp\HandlerStack',
+        'Illuminate\Contracts\Container\Container',
         'Illuminate\Support\ServiceProvider',
         'Anthropic\Laravel',
         'Anthropic',
         'Illuminate\Contracts\Support\DeferrableProvider',
+        'InvalidArgumentException',
 
         // helpers...
         'config',

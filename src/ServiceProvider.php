@@ -9,8 +9,11 @@ use Anthropic\Client;
 use Anthropic\Contracts\ClientContract;
 use Anthropic\Laravel\Commands\InstallCommand;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
+use GuzzleHttp\HandlerStack;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+use InvalidArgumentException;
 
 /**
  * @internal
@@ -22,7 +25,7 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
      */
     public function register(): void
     {
-        $this->app->singleton(ClientContract::class, static function (): Client {
+        $this->app->singleton(ClientContract::class, static function (Container $app): Client {
             $apiKey = config('anthropic.api_key');
             $authToken = self::nonBlankString(config('anthropic.auth_token'));
 
@@ -37,7 +40,32 @@ class ServiceProvider extends BaseServiceProvider implements DeferrableProvider
                 $guzzleOptions['connect_timeout'] = (float) $connectTimeout;
             }
 
+            $stack = HandlerStack::create();
+            $middleware = config('anthropic.http.middleware', []);
+
+            if (is_string($middleware)) {
+                $middleware = [$middleware];
+            }
+
+            foreach (is_array($middleware) ? $middleware : [] as $entry) {
+                $resolved = is_string($entry) ? $app->make($entry) : $entry;
+
+                if (! is_callable($resolved)) {
+                    throw new InvalidArgumentException('Each anthropic.http.middleware entry must be a Guzzle middleware: an invokable class name or a callable.');
+                }
+
+                $stack->push($resolved);
+            }
+
+            $guzzleOptions['handler'] = $stack;
+
             $factory = Anthropic::factory()->withHttpClient(new \GuzzleHttp\Client($guzzleOptions));
+
+            $maxRetries = config('anthropic.max_retries');
+
+            if (is_numeric($maxRetries) && (int) $maxRetries > 0) {
+                $factory = $factory->withMaxRetries((int) $maxRetries);
+            }
 
             // One credential, as in the official SDKs: the key when one is set, the token otherwise. A token
             // exported in the shell for another tool then never rides along with the app's key.

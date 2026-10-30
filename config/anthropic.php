@@ -67,6 +67,33 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Retries
+    |--------------------------------------------------------------------------
+    |
+    | How many times a failed request is sent again: connection failures and
+    | timeouts, and the statuses the API marks as worth retrying (408, 409,
+    | 429, 529 and other 5xx). The client waits as long as the API asks, or
+    | backs off. Defaults to 0; the official SDKs use 2.
+    */
+
+    'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Middleware
+    |--------------------------------------------------------------------------
+    |
+    | Guzzle middleware pushed onto the client's handler stack, as class names
+    | the container resolves to a Guzzle middleware callable. Class names keep
+    | the config cacheable.
+    */
+
+    'http' => [
+        'middleware' => [],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Extra Headers
     |--------------------------------------------------------------------------
     |

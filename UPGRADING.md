@@ -8,7 +8,7 @@ This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw
 
 **Likelihood Of Impact: Low**
 
-The config has four new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`) and `headers`. A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
+The config has six new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`), `max_retries` (`ANTHROPIC_MAX_RETRIES`), `http` (Guzzle middleware) and `headers`. A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
 
 ## To 1.10.0
 

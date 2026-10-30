@@ -16,6 +16,10 @@ return [
     'workspace_id' => env('ANTHROPIC_WORKSPACE_ID'),
     'request_timeout' => env('ANTHROPIC_REQUEST_TIMEOUT', 30),
     'connect_timeout' => env('ANTHROPIC_CONNECT_TIMEOUT'),
+    'max_retries' => env('ANTHROPIC_MAX_RETRIES', 0),
+    'http' => [
+        'middleware' => [],
+    ],
     'headers' => [],
     'beta' => array_values(array_filter(array_map(
         'trim',
@@ -26,7 +30,7 @@ return [
 ];
 ```
 
-Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
+Only a credential is required: the API key, or an auth token in its place. The rest are optional: the workspace requests run in, the request timeout (30 seconds unless you change it) and the connect timeout, retries, Guzzle middleware, extra headers for every request, beta features to opt into, the API version, and a base URL for a proxy or gateway.
 
 ## Environment variables
 
@@ -43,6 +47,7 @@ ANTHROPIC_BETA=files-api-2025-04-14,extended-cache-ttl-2025-04-11
 | `ANTHROPIC_WORKSPACE_ID` | None | The `anthropic-workspace-id` header, which an API key not scoped to one workspace needs |
 | `ANTHROPIC_REQUEST_TIMEOUT` | `30` | HTTP request timeout in seconds |
 | `ANTHROPIC_CONNECT_TIMEOUT` | None | Seconds to wait while connecting (streamed requests ignore it) |
+| `ANTHROPIC_MAX_RETRIES` | `0` | How many times a failed request is sent again |
 | `ANTHROPIC_BETA` | None | Comma-separated list of beta feature headers to send on every request |
 | `ANTHROPIC_API_VERSION` | `2023-06-01` | The `anthropic-version` header sent on every request |
 | `ANTHROPIC_BASE_URL` | `https://api.anthropic.com` | A proxy or gateway in front of the API, without `/v1` |
@@ -66,6 +71,45 @@ You'll want a longer timeout when:
 
 For streamed requests, the timeout applies to the initial connection. After that, data flows chunk-by-chunk.
 
+## Retries
+
+```env
+ANTHROPIC_MAX_RETRIES=2
+```
+
+With retries on, the client sends a request again after a connection failure or a timeout, or a 408, 409, 429 or 5xx response (the 529 overload included), waiting as long as the API asks or backing off from half a second. Two is what the official SDKs use.
+
+One call can then take up to `max_retries + 1` times `ANTHROPIC_REQUEST_TIMEOUT`, plus the waits between attempts, which last as long as the API's `retry-after` says. Size a queued job's `$timeout`, and the queue connection's `retry_after`, for that, or the worker hands the job to another process while the first is still waiting. A job that releases itself on a rate limit (see [Error Handling](./error-handling.md#retrying-failed-jobs)) does its own waiting, so it turns the client's retries off for its call with `Anthropic::withOptions(['max_retries' => 0])`. That works for a web request that can't wait, too.
+
+## Guzzle middleware
+
+`http.middleware` takes class names of Guzzle middleware, which the container resolves and pushes onto the client's handler stack. A class name keeps `config:cache` working, where a closure wouldn't:
+
+```php
+// config/anthropic.php
+'http' => [
+    'middleware' => [
+        \App\Http\Anthropic\TagRequests::class,
+    ],
+],
+```
+
+```php
+namespace App\Http\Anthropic;
+
+use Psr\Http\Message\RequestInterface;
+
+class TagRequests
+{
+    public function __invoke(callable $handler): callable
+    {
+        return fn (RequestInterface $request, array $options) => $handler($request->withHeader('X-App', config('app.name')), $options);
+    }
+}
+```
+
+Guzzle middleware sees every attempt, retries included.
+
 ## Per-request options
 
 `Anthropic::withOptions()` returns a client whose requests carry extra settings, leaving the app-wide client as it is. It's the way to run one call in another workspace, add a beta for one feature, or tag requests for your gateway:
@@ -82,7 +126,7 @@ $client = Anthropic::withOptions([
 $response = $client->messages()->create([...]);
 ```
 
-The options are `headers`, `query`, `betas`, `api_version`, `workspace_id` and `user_profile_id`; the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration) describes each. Methods that take only an ID, such as `Anthropic::models()->retrieve()`, get their betas this way.
+The options are `headers`, `query`, `betas`, `api_version`, `workspace_id`, `user_profile_id` and `max_retries`; the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration) describes each. Methods that take only an ID, such as `Anthropic::models()->retrieve()`, get their betas this way.
 
 ## API version
 
@@ -110,7 +154,7 @@ A few things to know before you set it:
 
 ## Upgrading an older config file
 
-A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `headers`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
+A `config/anthropic.php` published by an earlier release lacks the newer keys (`auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `http`, `headers`, `api_version`, `base_url`), and the package doesn't merge its defaults into your file, so their variables do nothing until you add the keys. Copy them from the config block above, or run `php artisan anthropic:install` again: it names the keys your published file is missing and adds the `.env` lines you don't have yet.
 
 ## Beta features
 
@@ -210,7 +254,7 @@ It leaves an existing `config/anthropic.php` alone unless you add `--force`, whi
 
 ## Using a custom HTTP client
 
-The default client is Guzzle with the configured timeout. If you need different HTTP client behavior (custom middleware, retries, a different PSR-18 implementation), replace the client with `extend()` in a service provider's `register()` method:
+The default client is Guzzle with the configured timeouts, retries and `http.middleware`. If you need a different PSR-18 implementation, or Guzzle options the config doesn't cover, replace the client with `extend()` in a service provider's `register()` method:
 
 ```php
 use Anthropic;
@@ -228,6 +272,6 @@ public function register(): void
 }
 ```
 
-The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
+The replacement is a new client, so it only has what you pass it: carry over the config values you rely on, like the API version and betas above (a blank version keeps the default), and `withWorkspaceId()`, `withAuthToken()`, `withMaxRetries((int) config('anthropic.max_retries'))` or `withBaseUrl((string) config('anthropic.base_url'))` when you use those keys. `http.middleware` reaches only the package's own Guzzle client, so push your middleware onto the handler stack of the client you build. The package's own client is built first and handed to the closure, so `ANTHROPIC_API_KEY` or `ANTHROPIC_AUTH_TOKEN` still has to be set, or `ApiKeyIsMissing` is thrown before your closure runs.
 
 Use `extend()`, not `singleton()` or `instance()`: the package's provider is deferred, and when it loads it registers its own binding over an earlier one, while an extender survives and runs on the package's client. `Anthropic::fake()` still replaces the result in tests. The factory's options are on the [Configuration page in the PHP docs](https://mozex.dev/docs/anthropic-php/v1/reference/configuration).

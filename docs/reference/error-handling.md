@@ -65,7 +65,7 @@ try {
 
 ## Retrying failed jobs
 
-Queue jobs are a natural fit for retry logic. Combine Laravel's `tries` and `backoff` with rate limit handling:
+With `ANTHROPIC_MAX_RETRIES` set (see [Configuration](./configuration.md#retries)), the client retries connection failures, 429s and overloads itself before your code sees an exception. For longer waits, queue jobs are a natural fit for retry logic. Combine Laravel's `tries` and `backoff` with rate limit handling. The job below does its own waiting, so it turns the client's retries off for its call:
 
 ```php
 use Anthropic\Exceptions\OverloadedException;
@@ -83,7 +83,7 @@ class AskClaudeJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            $response = Anthropic::messages()->create([...]);
+            $response = Anthropic::withOptions(['max_retries' => 0])->messages()->create([...]);
         } catch (RateLimitException $e) {
             if (($e->getErrorDetails()['error_code'] ?? null) === 'enforced_spend_limit_reached') {
                 $this->fail($e); // Monthly spend cap: retrying won't help
