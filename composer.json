@@ -35,7 +35,7 @@
         "php": "^8.2.0",
         "guzzlehttp/guzzle": "^7.9.3",
         "laravel/framework": "^12.69|^13.30",
-        "mozex/anthropic-php": "^1.8.0"
+        "mozex/anthropic-php": "^1.10.0"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
