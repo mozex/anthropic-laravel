@@ -2,6 +2,29 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.10.0 - 2026-11-01
+
+### What's Changed
+
+* Requires `mozex/anthropic-php` 1.10, with its typed fields, lossless `toArray()`, API version option and error fixes.
+* New `api_version` (`ANTHROPIC_API_VERSION`) and `base_url` (`ANTHROPIC_BASE_URL`) config keys. `base_url` works like the official SDKs: `/v1` is added unless the URL already ends in it. A config published by an earlier release needs both keys added by hand; `anthropic:install` names what's missing.
+* `anthropic:install` adds each `.env` key a file lacks, the optional ones commented out.
+* `Anthropic::fake()` also replaces the client for code that has `ClientContract` injected.
+* `php artisan vendor:publish --tag=anthropic-config` publishes the config file.
+* The docs and the Boost skill cover the new config keys, the computer and browser toolsets (dispatching on `toolset_name`), programmatic tool calling, the MCP connector, streamed refusals, model lifecycle checks, reading `retryAfter` in a queued job, and uploading a request's file under its original name. The skill also says to keep the queue's `retry_after` above the job's timeout, so a slow call isn't run and paid for twice.
+
+#### Fixes
+
+* The error-handling docs and the Boost skill match overloads with `getErrorType()`, which also catches an overload in the middle of a stream.
+* The docs replace the client through `$this->app->extend(ClientContract::class, ...)`; a binding made earlier in a service provider was dropped when the deferred provider loaded.
+* The tool use docs and the Boost skill no longer tell you to skip a tool call made from code execution: such a call is waiting for your result.
+
+#### Upgrading
+
+A dependency typed `Anthropic\Client` can't take the fake and throws a `TypeError` after `Anthropic::fake()`; type-hint `ClientContract`. Classes are no longer `final`. See `UPGRADING.md`.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.9.0...1.10.0
+
 ## 1.9.0 - 2026-10-08
 
 ### What's Changed
@@ -70,6 +93,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 
 
 
+
 ```
 #### Improved
 
@@ -118,6 +142,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
