@@ -219,7 +219,9 @@ class ClientBuilder
                 $laravel->push($pending->buildRecorderHandler());
                 $laravel->push($pending->buildStubHandler());
 
-                return $laravel($request, $options);
+                // Two options every request of Laravel's own client carries, which Laravel 12 reads without a default
+                // (its recorder and stub handlers the data, Http::fake()'s answer the stats callback); 13.30 has defaults.
+                return $laravel($request, $options + ['laravel_data' => [], 'on_stats' => static function (): void {}]);
             });
         }
 
