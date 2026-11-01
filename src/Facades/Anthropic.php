@@ -14,6 +14,8 @@ use Anthropic\Responses\Messages\StreamResponse as MessagesStreamResponse;
 use Anthropic\Responses\Raw\RawResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Facade;
+use RuntimeException;
+use SensitiveParameter;
 use Stringable;
 use Throwable;
 
@@ -43,6 +45,25 @@ class Anthropic extends Facade
     protected static function getFacadeAccessor(): string
     {
         return AnthropicManager::class;
+    }
+
+    /**
+     * Forwards a call to the manager as Laravel's facade does, with the arguments kept out of a trace: `withApiKey()`
+     * and `withOptions()` can carry a key, and Flare collects a trace's arguments. Laravel's body rather than a call to
+     * `parent::__callStatic()`, whose frame would hold the arguments unmarked.
+     *
+     * @param  string  $method
+     * @param  array<array-key, mixed>  $args
+     */
+    public static function __callStatic($method, #[SensitiveParameter] $args): mixed
+    {
+        $instance = static::getFacadeRoot();
+
+        if (! is_object($instance)) {
+            throw new RuntimeException('A facade root has not been set.');
+        }
+
+        return $instance->{$method}(...$args);
     }
 
     /**

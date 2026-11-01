@@ -13,6 +13,7 @@ use Anthropic\Laravel\ClientBuilder;
 use Anthropic\Laravel\Exceptions\ApiKeyIsMissing;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
+use SensitiveParameter;
 use Throwable;
 
 /**
@@ -87,7 +88,7 @@ class DoctorCommand extends Command
      *
      * @param  array<array-key, mixed>  $config
      */
-    private function client(AnthropicManager $manager, string $name, array $config, bool $offline): ClientContract|false|null
+    private function client(AnthropicManager $manager, string $name, #[SensitiveParameter] array $config, bool $offline): ClientContract|false|null
     {
         // An empty `ANTHROPIC_API_KEY=` line is no credential, though the default connection builds without one.
         $settings = $name === AnthropicManager::DEFAULT ? ClientBuilder::withLaravelAi($config) : $config;
@@ -167,7 +168,7 @@ class DoctorCommand extends Command
      *
      * @param  array<array-key, mixed>  $config
      */
-    private function timeouts(array $config): void
+    private function timeouts(#[SensitiveParameter] array $config): void
     {
         $timeout = ClientBuilder::requestTimeout($config);
 
@@ -310,7 +311,7 @@ class DoctorCommand extends Command
      *
      * @param  array<array-key, mixed>  $config
      */
-    private function fallbackModels(ClientContract $client, array $config): void
+    private function fallbackModels(ClientContract $client, #[SensitiveParameter] array $config): void
     {
         foreach (ClientBuilder::fallbackModels($config) as $model) {
             $label = "Fallback model [{$model}]";

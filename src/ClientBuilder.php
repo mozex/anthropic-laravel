@@ -21,6 +21,7 @@ use InvalidArgumentException;
 use Laravel\Nightwatch\Core as Nightwatch;
 use Laravel\Telescope\Telescope;
 use Psr\Http\Message\RequestInterface;
+use SensitiveParameter;
 
 /**
  * Builds a client from one connection's settings: the top-level keys of `config/anthropic.php` for the default
@@ -33,7 +34,7 @@ class ClientBuilder
     /**
      * @param  array<array-key, mixed>  $config
      */
-    public static function make(Container $app, array $config, string $connection = 'default'): Client
+    public static function make(Container $app, #[SensitiveParameter] array $config, string $connection = 'default'): Client
     {
         $apiKey = $config['api_key'] ?? null;
         $authToken = self::nonBlankString($config['auth_token'] ?? null);
@@ -134,7 +135,7 @@ class ClientBuilder
      * @param  array<array-key, mixed>  $config
      * @return list<callable>
      */
-    private static function middleware(Container $app, array $config, string $connection): array
+    private static function middleware(Container $app, #[SensitiveParameter] array $config, string $connection): array
     {
         $middleware = [];
         $fallbackModels = self::fallbackModels($config);
@@ -170,7 +171,7 @@ class ClientBuilder
      *
      * @param  array<array-key, mixed>  $config
      */
-    private static function httpClient(Container $app, array $config): GuzzleClient
+    private static function httpClient(Container $app, #[SensitiveParameter] array $config): GuzzleClient
     {
         $options = ['timeout' => self::requestTimeout($config)];
         $connectTimeout = $config['connect_timeout'] ?? null;

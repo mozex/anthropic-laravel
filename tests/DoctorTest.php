@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Anthropic\Laravel\Commands\DoctorCommand;
 use Anthropic\Responses\Models\ListResponse;
 use Anthropic\Responses\Models\RetrieveResponse;
 use Illuminate\Support\Facades\Facade;
@@ -255,3 +256,9 @@ test('about says a missing credential is missing', function () {
         ->expectsOutputToContain('MISSING')
         ->assertSuccessful();
 });
+
+test('the doctor keeps the config it checks out of a trace', function (string $method) {
+    $config = array_values(array_filter((new ReflectionMethod(DoctorCommand::class, $method))->getParameters(), fn (ReflectionParameter $parameter): bool => $parameter->getName() === 'config'));
+
+    expect($config[0]->getAttributes(SensitiveParameter::class))->not->toBeEmpty();
+})->with(['client', 'timeouts', 'fallbackModels']);

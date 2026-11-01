@@ -125,7 +125,9 @@ test("the manager's own names are its clients, not connections, faked or not", f
 test('withApiKey() builds a new client of the default settings every time', function () {
     $tenant = Anthropic::withApiKey('sk-ant-tenant');
 
-    expect(managerHeaders($tenant))->toMatchArray(['x-api-key' => 'sk-ant-tenant', 'anthropic-workspace-id' => 'wrkspc_011CZkZaBF1tNoB5wlCeusgy'])
+    expect(managerHeaders($tenant))->toMatchArray(['x-api-key' => 'sk-ant-tenant'])
+        // the default workspace belongs to the app's key: the API answers a tenant's key sent with it with a 404
+        ->and(managerHeaders($tenant))->not->toHaveKey('anthropic-workspace-id')
         ->and(Anthropic::withApiKey('sk-ant-tenant'))->not->toBe($tenant);
 });
 
@@ -136,6 +138,52 @@ test('a blank key for withApiKey() throws, faked or not', function () {
 
     expect(fn () => Anthropic::withApiKey(''))->toThrow(ApiKeyIsMissing::class, 'withApiKey() is blank');
 });
+
+/**
+ * Whether the value, or any array inside it, holds one of the texts.
+ *
+ * @param  list<string>  $texts
+ */
+function traceHolds(mixed $value, array $texts): bool
+{
+    if (is_string($value)) {
+        return array_filter($texts, fn (string $text): bool => str_contains($value, $text)) !== [];
+    }
+
+    return is_array($value) && array_filter($value, fn (mixed $item): bool => traceHolds($item, $texts)) !== [];
+}
+
+test('a config error keeps the keys out of the trace', function (array $config, Closure $build, string $message) {
+    config($config);
+    $ignoreArgs = (string) ini_get('zend.exception_ignore_args');
+
+    // php.ini-production leaves the arguments out, but Flare turns that off at runtime to collect them.
+    ini_set('zend.exception_ignore_args', '0');
+
+    try {
+        $build();
+    } catch (Throwable $exception) {
+    } finally {
+        ini_set('zend.exception_ignore_args', $ignoreArgs);
+    }
+
+    // The frames from the call the closure makes in, the facade's included; the ones above it are this test's and Pest's.
+    $trace = $exception->getTrace();
+    $call = array_key_first(array_filter($trace, fn (array $frame): bool => ($frame['file'] ?? null) === __FILE__));
+    $args = array_column(array_slice($trace, 0, (int) $call + 1), 'args');
+
+    expect($exception->getMessage())->toContain($message)
+        // the arguments were kept, so the check below has something to look at
+        ->and(array_filter($args))->not->toBe([])
+        ->and(traceHolds($args, ['sk-ant-default', 'sk-ant-support', 'sk-ant-tenant']))->toBeFalse();
+})->with([
+    'the default connection' => [['anthropic.max_retries' => 'many'], fn () => app(ClientContract::class), 'max_retries'],
+    'a named connection' => [['anthropic.connections.support.max_retries' => 'many'], fn () => Anthropic::connection('support'), 'max_retries'],
+    'a tenant key' => [['anthropic.max_retries' => 'many'], fn () => Anthropic::withApiKey('sk-ant-tenant'), 'max_retries'],
+    'a request option' => [[], fn () => Anthropic::withOptions(['headers' => ['x-api-key' => 'sk-ant-tenant'], 'max_retries' => 'two']), 'max_retries'],
+    'client middleware that isn\'t callable' => [['anthropic.middleware' => [5]], fn () => app(ClientContract::class), 'anthropic.middleware'],
+    'Guzzle middleware that isn\'t callable' => [['anthropic.http.middleware' => [5]], fn () => app(ClientContract::class), 'anthropic.http.middleware'],
+]);
 
 test('the organization, enterprise and compliance clients use their own keys, compliance as a bearer token', function () {
     config(['anthropic.admin_key' => 'sk-ant-admin01-key', 'anthropic.enterprise_key' => 'sk-ant-enterprise', 'anthropic.compliance_key' => 'sk-ant-compliance']);

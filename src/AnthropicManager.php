@@ -10,6 +10,7 @@ use Anthropic\Laravel\Testing\AnthropicFake;
 use Illuminate\Support\MultipleInstanceManager;
 use Illuminate\Support\Traits\Macroable;
 use InvalidArgumentException;
+use SensitiveParameter;
 
 /**
  * The facade's root: the default connection (the top-level keys of `config/anthropic.php`), the named ones under
@@ -84,9 +85,10 @@ class AnthropicManager extends MultipleInstanceManager
 
     /**
      * A client of the default connection's settings with another API key, such as a tenant's. A new one on every call,
-     * never cached, so a key never outlives the request or job it was meant for.
+     * never cached, so a key never outlives the request or job it was meant for. It sends no `workspace_id`: the
+     * default one belongs to the app's key, and the API answers another key sent with it with a 404.
      */
-    public function withApiKey(string $apiKey): ClientContract
+    public function withApiKey(#[SensitiveParameter] string $apiKey): ClientContract
     {
         // A tenant's empty key column would otherwise build a client that sends no credential at all.
         if (trim($apiKey) === '') {
@@ -97,7 +99,7 @@ class AnthropicManager extends MultipleInstanceManager
             return $this->fake->onConnection(self::DEFAULT);
         }
 
-        return ClientBuilder::make($this->app, [...$this->defaultSettings(), 'api_key' => $apiKey, 'auth_token' => null], self::DEFAULT);
+        return ClientBuilder::make($this->app, [...$this->defaultSettings(), 'api_key' => $apiKey, 'auth_token' => null, 'workspace_id' => null], self::DEFAULT);
     }
 
     /**
@@ -199,7 +201,7 @@ class AnthropicManager extends MultipleInstanceManager
     /**
      * @param  array<array-key, mixed>  $config
      */
-    protected function createAnthropicDriver(array $config): ClientContract
+    protected function createAnthropicDriver(#[SensitiveParameter] array $config): ClientContract
     {
         $name = is_string($config['name'] ?? null) ? $config['name'] : self::DEFAULT;
 
@@ -214,7 +216,7 @@ class AnthropicManager extends MultipleInstanceManager
      * @param  string  $method
      * @param  array<array-key, mixed>  $parameters
      */
-    public function __call($method, $parameters): mixed
+    public function __call($method, #[SensitiveParameter] $parameters): mixed
     {
         if (static::hasMacro($method)) {
             return $this->macroCall($method, $parameters);
