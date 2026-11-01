@@ -18,23 +18,25 @@ The config gains `connections` and `middleware`; `php artisan anthropic:install`
 
 **Likelihood Of Impact: Low**
 
-A `max_retries` that isn't a whole number of 0 or more (`ANTHROPIC_MAX_RETRIES=many`), or a header value in `headers` that isn't a string, number or boolean, used to be skipped. It now throws `Anthropic\Exceptions\InvalidArgumentException` when the client is built, naming the key. A `beta` entry that isn't a string is still skipped.
+A config value of the wrong type throws `Anthropic\Exceptions\InvalidArgumentException` when the client is built, naming the key: an `api_version` or `base_url` that isn't a string (1.10.0 skipped it; `ANTHROPIC_BASE_URL=true` gives the boolean `true`), a `max_retries` that isn't a whole number of 0 or more, or a value in `headers` that isn't a string, number or boolean. A `beta` entry that isn't a string is still skipped, but a `beta` written by hand as one string, such as `env('ANTHROPIC_BETA')`, is now sent, split at its commas, where 1.10.0 ignored it.
 
 ### Nightwatch Records The Calls
 
 **Likelihood Of Impact: Low**
 
-With Laravel Nightwatch installed and enabled, its Guzzle middleware is now attached to the client, so the API calls show up in Nightwatch as outgoing requests. Set `ANTHROPIC_HTTP_NIGHTWATCH=false` to leave them out; a `config/anthropic.php` published earlier needs `'nightwatch' => (bool) env('ANTHROPIC_HTTP_NIGHTWATCH', true)` in its `http` array first.
+With Laravel Nightwatch installed and enabled, its Guzzle middleware is now attached to the client, so the API calls show up in Nightwatch as outgoing requests. Set `ANTHROPIC_HTTP_NIGHTWATCH=false` to leave them out; a `config/anthropic.php` published earlier needs an `http` array with `'nightwatch' => (bool) env('ANTHROPIC_HTTP_NIGHTWATCH', true)` in it first (or the whole `http` block from the package's config).
 
 ### New Config Keys
 
 **Likelihood Of Impact: Low**
 
-The config gains `context` (`ANTHROPIC_CONTEXT`), which adds each answer's request ID and token counts to Laravel's Context, and two `http` switches: `telescope` (`ANTHROPIC_HTTP_TELESCOPE`), which records each call in Telescope with tags, and `nightwatch` (`ANTHROPIC_HTTP_NIGHTWATCH`, on by default). A published `http` array lacks the two switches, so add them to it. `php artisan anthropic:install` names the keys an older published file lacks, `http.telescope` and `http.nightwatch` included, and adds the `.env` lines, commented out.
+The config has new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`), `max_retries` (`ANTHROPIC_MAX_RETRIES`), `fallback_models` (`ANTHROPIC_FALLBACK_MODELS`), `context` (`ANTHROPIC_CONTEXT`), which adds each answer's request ID and token counts to Laravel's Context, `headers`, and `http`. The `http` array holds Guzzle middleware and four switches: `laravel_client` (`ANTHROPIC_HTTP_LARAVEL_CLIENT`), `laravel_events` (`ANTHROPIC_HTTP_LARAVEL_EVENTS`), `telescope` (`ANTHROPIC_HTTP_TELESCOPE`), which records each call in Telescope with tags, and `nightwatch` (`ANTHROPIC_HTTP_NIGHTWATCH`, on by default). A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
 
-## To 1.11.0
+### Error Statuses Throw Subclasses Of ErrorException
 
-This release requires `mozex/anthropic-php` 1.11, whose error statuses now throw subclasses of `ErrorException`, such as `OverloadedException` for a 529. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`). Read its [upgrade notes](https://github.com/mozex/anthropic-php/blob/main/UPGRADING.md#to-1110) as well.
+**Likelihood Of Impact: Low**
+
+`mozex/anthropic-php` 1.12 throws a subclass of `ErrorException` for each error status, such as `OverloadedException` for a 529, and the facade's calls do too. A `catch (ErrorException $e)` still catches them. Code comparing the exact class (`get_class($e) === ErrorException::class`) no longer matches, error trackers that group by class name file these under the new names, and a `rate_limit_error` in the middle of a stream is now a `RateLimitException` (status 200, no `Retry-After`).
 
 ### The Models lifecycle Filter Now Applies
 
@@ -47,12 +49,6 @@ A list in a query, such as `Anthropic::models()->list(['lifecycle' => ['retired'
 **Likelihood Of Impact: Low**
 
 Every HTTP attempt now dispatches `Anthropic\Laravel\Events\RequestSending`, `ResponseReceived`, and on a failure `RequestFailed` (with `RateLimited` on a 429). A listener for those classes, or a wildcard listener, now sees them. Nothing is built or dispatched while no listener waits.
-
-### New Config Keys
-
-**Likelihood Of Impact: Low**
-
-The config has seven new keys: `auth_token` (`ANTHROPIC_AUTH_TOKEN`), `workspace_id` (`ANTHROPIC_WORKSPACE_ID`), `connect_timeout` (`ANTHROPIC_CONNECT_TIMEOUT`), `max_retries` (`ANTHROPIC_MAX_RETRIES`), `fallback_models` (`ANTHROPIC_FALLBACK_MODELS`), `http` (Guzzle middleware, and the `laravel_client` and `laravel_events` switches, `ANTHROPIC_HTTP_LARAVEL_CLIENT` and `ANTHROPIC_HTTP_LARAVEL_EVENTS`) and `headers`. A `config/anthropic.php` published earlier lacks them, and their variables do nothing until you copy the keys in; `php artisan anthropic:install` names the missing ones and adds the `.env` lines, commented out.
 
 ## To 1.10.0
 
