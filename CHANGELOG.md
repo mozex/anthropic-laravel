@@ -2,6 +2,36 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.12.0 - 2026-11-01
+
+### What's Changed
+
+* Requires `mozex/anthropic-php` 1.12, with its typed exceptions, retries, middleware, per-request options and refusal fallback.
+* Named connections under `connections`, reached with `Anthropic::connection('name')`. `Anthropic::withApiKey()` builds a client for a tenant's key (without the default `workspace_id`), and `Anthropic::organization()`, `enterprise()` and `compliance()` reach the Admin, Enterprise and Compliance keys.
+* One `Anthropic::fake()` answers every connection; `assertSentOn()` checks which one a call used.
+* The facade's root is `AnthropicManager`, so macros work on it.
+* New config keys `auth_token`, `workspace_id`, `connect_timeout`, `max_retries`, `fallback_models`, `middleware` (the client's own, such as `OpenTelemetryMiddleware`), `headers`, `context` and `http` (Guzzle `middleware`, `laravel_client`, `laravel_events`, `telescope`, `nightwatch`). `anthropic:install` names the keys an older published file lacks and adds their `.env` lines, commented out.
+* A config value of the wrong type, such as `max_retries`, throws when the client is built, naming the key.
+* `Anthropic::withOptions()`, `Anthropic::request()` and `iterate()` on the list resources, with fakes.
+* Every request dispatches `RequestSending`, `ResponseReceived`, `RequestFailed` and `RateLimited`, with serializable data and no credentials or MCP server tokens.
+* `http.laravel_client` lets `Http::fake()` see the calls, and `http.laravel_events` lets Telescope record them.
+* With laravel/ai installed and no key of its own, the package uses laravel/ai's Anthropic key and URL.
+* `php artisan anthropic:doctor` checks the key, the API, the queues' `retry_after` against the longest call, and the fallback models' lifecycle, and exits non-zero on a failure.
+* `php artisan about` shows an Anthropic section.
+* `ANTHROPIC_CONTEXT=true` adds request IDs and token counts to Laravel's Context, and `ANTHROPIC_HTTP_TELESCOPE=true` records tagged Telescope entries. With Laravel Nightwatch installed, the calls show up there; `ANTHROPIC_HTTP_NIGHTWATCH=false` leaves them out.
+* A Boost guideline with the rules that trip people up, always in an agent's context.
+* The error-handling docs and the Boost skill use the typed exceptions.
+
+#### Fixes
+
+* The models list's `lifecycle` filter now applies.
+* An empty `ANTHROPIC_REQUEST_TIMEOUT=` line means the default 30 seconds instead of making every request throw a `TypeError`.
+* A key in the config stays out of a stack trace's arguments when building a client fails, since error trackers such as Flare collect them.
+
+`UPGRADING.md` lists the changes that can affect code written against 1.10.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.10.0...1.12.0
+
 ## 1.10.0 - 2026-11-01
 
 ### What's Changed
@@ -94,6 +124,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 
 
 
+
 ```
 #### Improved
 
@@ -142,6 +173,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
