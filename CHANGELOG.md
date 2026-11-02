@@ -2,6 +2,24 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.13.0 - 2026-11-02
+
+### What's Changed
+
+* Requires `mozex/anthropic-php` 1.13, with its new fakes, `batches()->wait()` and the token-limit helpers.
+* `Anthropic::batch($requests)->then(...)->dispatch()` sends a Message Batch and polls it in a queued job until it ends, on any connection or tenant key. `catch()`, `onQueue()`, `onConnection()`, `every()` and `timeout()` set the rest, and `BatchSubmitted`, `BatchResultReceived` (once per result) and `BatchEnded` are dispatched along the way.
+* `Anthropic::connection()` and `withApiKey()` return `Anthropic\Laravel\Connection`.
+* `Anthropic::record()` records the default connection's calls once and replays them from a file.
+* `Anthropic::assertBatched()`, `assertNotBatched()`, and the fake's new assertions and responders through the facade.
+* The `ThrottlesAnthropic` job middleware fails a job on the spend cap (dispatching `SpendCapReached`) and on errors a retry can't fix, and releases it on rate limits and overloads, holding the key back meanwhile.
+* `Anthropic::models()->cached()` keeps the model list in the cache, refreshed in the background once it's an hour old.
+* `php artisan anthropic:batches`, `anthropic:ping`, `anthropic:count-tokens`, `anthropic:chat` and `anthropic:models`.
+* The `FitsInTokens` validation rule fails a text that would count more input tokens than a limit.
+
+`UPGRADING.md` lists the changes that can affect code written against 1.12, such as `Anthropic::connection()` now returning `Connection`.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.12.0...1.13.0
+
 ## 1.12.0 - 2026-11-01
 
 ### What's Changed
@@ -125,6 +143,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 
 
 
+
 ```
 #### Improved
 
@@ -173,6 +192,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
