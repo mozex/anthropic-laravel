@@ -144,9 +144,11 @@ test('an error the API won\'t recover from fails the job, and its catch callback
     Anthropic::fake([submittedBatch(), NotFoundException::fake()]);
     config(['queue.default' => 'sync']);
 
+    // The callbacks take `object`: serializable-closure 1.x, which Laravel 12 still allows, reads a class name in a
+    // Pest closure against the test case's generated namespace, so `Throwable` would become `P\Tests\Throwable`.
     expect(fn () => Anthropic::batch(batchRequests())
         ->then(static fn () => Cache::put('batch', 'then'))
-        ->catch(static fn (Throwable $e) => Cache::put('batch', $e::class))
+        ->catch(static fn (object $e) => Cache::put('batch', $e::class))
         ->dispatch())->toThrow(NotFoundException::class);
 
     expect(Cache::get('batch'))->toBe(NotFoundException::class);
@@ -156,7 +158,7 @@ test('the sync queue, which can\'t poll again, says so instead of stopping', fun
     Anthropic::fake([submittedBatch(), submittedBatch()]);
 
     expect(fn () => Anthropic::batch(batchRequests())
-        ->catch(static fn (Throwable $e) => Cache::put('batch', $e->getMessage()))
+        ->catch(static fn (object $e) => Cache::put('batch', $e->getMessage()))
         ->dispatch())->toThrow(LogicException::class, "the sync queue can't poll it again");
 
     expect(Cache::get('batch'))->toContain('msgbatch_04Rka1yCsMLGPnR7kfPdgR8x');
@@ -234,7 +236,7 @@ test('on the sync queue, an error the API may recover from is final, since nothi
     Anthropic::fake([submittedBatch(), OverloadedException::fake()]);
 
     expect(fn () => Anthropic::batch(batchRequests())
-        ->catch(static fn (Throwable $e) => Cache::put('batch', $e::class))
+        ->catch(static fn (object $e) => Cache::put('batch', $e::class))
         ->dispatch())->toThrow(OverloadedException::class);
 
     expect(Cache::get('batch'))->toBe(OverloadedException::class);
