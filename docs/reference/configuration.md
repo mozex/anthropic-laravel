@@ -132,7 +132,7 @@ Guzzle middleware sees every attempt, retries included.
 
 ## Events
 
-A billed Messages call also dispatches `UsageRecorded`, with its tokens and who [`Anthropic::for()`](../usage/usage-ledger.md#billing-calls-to-someone) billed it to, whether the [usage ledger](../usage/usage-ledger.md) is on or not.
+A billed Messages call also dispatches `UsageRecorded`, with its tokens and who [`Anthropic::for()`](../usage/usage-ledger.md#billing-calls-to-someone) billed it to, whether the [usage ledger](../usage/usage-ledger.md) is on or not. A non-streamed call dispatches it just before `ResponseReceived`, and a stream when it ends.
 
 Every HTTP attempt dispatches events in `Anthropic\Laravel\Events`: `RequestSending`, then `ResponseReceived` with the status, the decoded body, the `usage`, the rate-limit `meta` and `durationMs`. A failure dispatches `RequestFailed` (an error status, or a connection failure with a null status), and a 429 also dispatches `RateLimited`, whose `errorCode` is `enforced_spend_limit_reached` for the monthly spend cap. Every value is a scalar or an array, so a queued listener can take them, and no credential is in them: no header that holds one (the key, a token, a gateway key), and no MCP server's `authorization_token` from the body. Register listeners in a service provider's `boot()`:
 
@@ -151,7 +151,7 @@ Event::listen(function (ResponseReceived $event) {
 });
 ```
 
-A retried request dispatches its events once per attempt, and so does each fallback attempt. A streamed answer's `ResponseReceived` has no body or usage, since its events are still to be read, and only JSON bodies are decoded, never an upload. A failure without an answer has the `errorType` `connection_error`, `client_timeout_error` or `transport_error`. A listener that throws fails the call, even one that already went through, so keep listeners small or queued. `Anthropic::fake()` sends nothing, so it dispatches nothing; `Event::fake()` sees the events whenever it's set.
+A retried request dispatches its events once per attempt, and so does each fallback attempt. A streamed answer's `ResponseReceived` has no body or usage, since its events are still to be read, and only JSON bodies are decoded, never an upload. A failure without an answer has the `errorType` `connection_error`, `client_timeout_error` or `transport_error`. A listener on these events that throws fails the call, even one that already went through, so keep listeners small or queued. A `UsageRecorded` listener that throws on a call or a stream is reported instead. `Anthropic::fake()` sends nothing, so it dispatches nothing; `Event::fake()` sees the events whenever it's set.
 
 ## Laravel's HTTP client and Telescope
 

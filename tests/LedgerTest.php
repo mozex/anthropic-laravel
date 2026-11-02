@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Anthropic\Laravel\AnthropicManager;
 use Anthropic\Laravel\AnthropicServiceProvider;
 use Anthropic\Laravel\Batches\PollBatch;
+use Anthropic\Laravel\Events\ResponseReceived;
 use Anthropic\Laravel\Events\UsageRecorded;
 use Anthropic\Laravel\Facades\Anthropic;
 use Anthropic\Laravel\Ledger\AnthropicRequest;
@@ -180,6 +181,48 @@ test('a UsageRecorded listener that throws is reported, never thrown into the re
     iterator_to_array(Anthropic::messages()->createStreamed(['model' => 'claude-sonnet-4-6']));
 
     Exceptions::assertReported(RuntimeException::class);
+});
+
+test('a queue that can\'t be reached is reported, and the call the API billed still answers', function () {
+    enableLedger();
+    Exceptions::fake();
+    Queue::shouldReceive('connection')->andThrow(new RuntimeException('queue connection refused'));
+    Http::fake(['*' => Http::response(CreateResponse::fake()->toArray())]);
+
+    $response = Anthropic::messages()->create(['model' => 'claude-sonnet-5-5']);
+
+    expect($response)->toBeInstanceOf(CreateResponse::class);
+    Exceptions::assertReported(fn (RuntimeException $e) => $e->getMessage() === 'queue connection refused');
+});
+
+test('a UsageRecorded listener that throws is reported, and the call the API billed still answers, with its row, its charge and its other events', function () {
+    enableLedger();
+    Exceptions::fake();
+    $budget = Anthropic::budget('user:7')->perDay(1000)->enforce();
+    Event::listen(UsageRecorded::class, fn () => throw new RuntimeException('metrics are down'));
+    $received = 0;
+    Event::listen(ResponseReceived::class, function () use (&$received) {
+        $received++;
+    });
+    Http::fake(['*' => Http::response(CreateResponse::fake()->toArray())]);
+
+    $response = Anthropic::messages()->create(['model' => 'claude-sonnet-5-5']);
+
+    expect($response)->toBeInstanceOf(CreateResponse::class)
+        ->and($received)->toBe(1)
+        ->and(AnthropicRequest::query()->count())->toBe(1)
+        ->and($budget->remaining())->toBe(1000 - $response->usage->billedTokens());
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+test('a ResponseReceived listener that throws can\'t skip the ledger\'s row', function () {
+    enableLedger();
+    Event::listen(ResponseReceived::class, fn () => throw new RuntimeException('metrics are down'));
+    Http::fake(['*' => Http::response(CreateResponse::fake()->toArray())]);
+
+    rescue(fn () => Anthropic::messages()->create(['model' => 'claude-sonnet-5-5']), report: false);
+
+    expect(AnthropicRequest::query()->count())->toBe(1);
 });
 
 test('the billable follows a job dispatched after Anthropic::for()', function () {

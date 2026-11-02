@@ -55,6 +55,9 @@ arch('middleware')
         'Psr\Http\Message',
         'Anthropic\Laravel\Ledger\Attribution',
         'Anthropic\Laravel\Budgets\Budget',
+
+        // helpers...
+        'report',
     ]);
 
 arch('service providers')

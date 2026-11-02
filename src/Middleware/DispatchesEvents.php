@@ -128,14 +128,22 @@ class DispatchesEvents
         $body = self::isStreamed($response) ? null : self::json($response);
         $meta = MetaInformation::from($response->getHeaders());
 
-        // A billed Messages answer, charged before any listener runs, so one that throws can't skip it; a stream
-        // records its usage once it ends, through the client's completion handler.
+        // A billed Messages answer, charged and recorded before any other listener runs, so one that throws can't skip
+        // it; a stream records its usage once it ends, through the client's completion handler. The API has billed
+        // this answer, so a queue that's down or a listener that throws is reported, never failing the call.
         $attribution = Attribution::current();
-        $usage = null;
 
         if ((isset($listening[UsageRecorded::class]) || $attribution['budgets'] !== []) && $status === 200 && is_array($body['usage'] ?? null) && $messages) {
             $usage = new UsageRecorded($this->connection, is_string($body['model'] ?? null) ? $body['model'] : null, $meta->requestId, $body['usage'], $duration, false, true, ...$attribution, at: Date::now()->getTimestamp());
             Budget::chargeRecorded($usage);
+
+            if (isset($listening[UsageRecorded::class])) {
+                try {
+                    $events->dispatch($usage);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
+            }
         }
 
         if (isset($listening[ResponseReceived::class])) {
@@ -150,10 +158,6 @@ class DispatchesEvents
                 $meta->toArray(),
                 $duration,
             ));
-        }
-
-        if ($usage !== null && isset($listening[UsageRecorded::class])) {
-            $events->dispatch($usage);
         }
 
         if ($status >= 400) {

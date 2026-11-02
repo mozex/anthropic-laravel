@@ -22,7 +22,7 @@ Billing models with UUID or ULID keys? Change the migration's `nullableMorphs('b
 
 Every non-streamed Messages answer, every stream once it ends (or is dropped, with the tokens it had), and every result of an [`Anthropic::batch()`](./batches.md) then writes a row to `anthropic_requests`: the model, the connection, the input, output, cache-read and cache-write tokens, the server tools' counts, the whole `usage` as JSON (with the cache's 5-minute and 1-hour split, for pricing), the service tier, the speed, whether it was a batch or completed, the request ID and the duration. A batch row also has its batch ID and `custom_id`. A call with `usage.iterations` (compaction, the advisor, a server-side fallback) counts its tokens across them, since the top-level counts leave those out.
 
-Rows are written by a queued listener (`ANTHROPIC_LEDGER_QUEUE` picks the queue), and a batch's poll job writes its results itself, in chunks. Writing is best effort: a row that fails is reported, and never fails the call or the batch. Token counts and errors write nothing, and neither does a stream you never read. With the ledger off, nothing touches the database. `duration_ms` covers the whole attempt for a non-streamed call, and from the headers to the end for a stream.
+Rows are written by a queued listener (`ANTHROPIC_LEDGER_QUEUE` picks the queue), and a batch's poll job writes its results itself, in chunks. Writing is best effort: a row that fails is reported, and never fails the call or the batch. The same goes for a call or a stream whose row can't be queued because the queue is down. Token counts and errors write nothing, and neither does a stream you never read. With the ledger off, nothing touches the database. `duration_ms` covers the whole attempt for a non-streamed call, and from the headers to the end for a stream.
 
 Batch results you read by hand through `Anthropic::batches()->results()` aren't recorded; send the batch with `Anthropic::batch()` for that.
 
@@ -79,6 +79,8 @@ Event::listen(function (UsageRecorded $usage) {
     Metrics::increment('claude.output_tokens', $usage->usage['output_tokens'] ?? 0, ['feature' => $usage->feature]);
 });
 ```
+
+A listener that throws on a call or a stream is reported, and the answer still reaches you, since the API has already billed it. One that throws on a batch result fails the poll job.
 
 A call or a stream under `Anthropic::fake()` dispatches none, but an `Anthropic::batch()` poll job still dispatches one per succeeded result (and writes its rows), as it does `BatchResultReceived`.
 
