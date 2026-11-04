@@ -2,6 +2,20 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.14.0 - 2026-11-04
+
+### What's Changed
+
+* Requires `mozex/anthropic-php` 1.14, with its stream completion handler and the billed-token helpers.
+* An opt-in usage ledger writes every billed call, stream and batch result to an `anthropic_requests` table, each row billed to whoever `Anthropic::for($user, feature: ...)` names. `php artisan anthropic:usage` sums it, and `model:prune` prunes it.
+* `UsageRecorded` is dispatched for every billed call, whether the ledger is on or not.
+* Token budgets: `Anthropic::budget('user:'.$user->id)->perDay(200_000)->enforce()`, the `anthropic.budget` route middleware and the `Anthropic\Laravel\Queue\TokenBudget` job middleware. Once a budget is used up, calls are refused before they're sent, with a 429 on a route and a release on a queue. Several budgets can hold at once.
+* With `ANTHROPIC_CONTEXT=true`, streams add their tokens to Context too.
+
+`UPGRADING.md` lists the changes that can affect code written against 1.13, such as streams now adding their tokens to Context.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.13.0...1.14.0
+
 ## 1.13.0 - 2026-11-02
 
 ### What's Changed
@@ -144,6 +158,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 
 
 
+
 ```
 #### Improved
 
@@ -192,6 +207,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
