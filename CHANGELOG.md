@@ -2,6 +2,21 @@
 
 All notable changes to `anthropic-laravel` will be documented in this file.
 
+## 1.15.0 - 2026-11-06
+
+### What's Changed
+
+* Requires `mozex/anthropic-php` 1.15, with its stream helpers and the streamed refusal fallback.
+* A stream from `Anthropic::messages()->createStreamed()` can be returned from a route: `toEventStream()` for Laravel's `useEventStream`, `toTextStream()` for `useStream`, and `toVercelStream()` for the AI SDK's `useChat`.
+* `broadcastTo()` sends a stream over Reverb or Pusher from a queued job, its text coalesced into `claude.delta` events that stay under the broadcaster's size limit.
+* The `InteractsWithClaudeStreams` trait streams a reply into a Livewire component with `streamClaude($stream, to: 'answer')`.
+* With `ANTHROPIC_FALLBACK_MODELS` set, streams fall back too.
+* `Anthropic::messages()` returns the package's own Messages resource, which implements `MessagesContract`.
+
+`UPGRADING.md` lists the changes that can affect code written against 1.14, such as an `instanceof Anthropic\Resources\Messages` check that's now false.
+
+**Full Changelog**: https://github.com/mozex/anthropic-laravel/compare/1.14.0...1.15.0
+
 ## 1.14.0 - 2026-11-04
 
 ### What's Changed
@@ -159,6 +174,7 @@ foreach ($response->usage->iterations ?? [] as $iteration) {
 
 
 
+
 ```
 #### Improved
 
@@ -207,6 +223,7 @@ $response = Anthropic::messages()->create([
         ],
     ]],
 ]);
+
 
 
 
